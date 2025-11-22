@@ -72,13 +72,28 @@ input:checked + .slider:before { transform: translateX(26px); }
 
 .slider.round { border-radius: 34px; }
 
-/* HERO SECTION */
 .hero {
-  background: linear-gradient(135deg, var(--trh-navy) 60%, #152b45 100%);
-  color: var(--trh-white);
+  position: relative;
   text-align: center;
   padding: 80px 20px;
+  color: var(--trh-white);
+
+  /* IMAGE + SEMI-TRANSPARENT GRADIENT */
+  background: 
+    linear-gradient(
+      135deg, 
+      rgba(14, 2, 123, 0.7) 60%, /* navy with 70% opacity */
+      rgba(4, 1, 39, 0.7) 100% /* dark blue with 70% opacity */
+    ),
+    url("images/thechef.jpg");
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  animation: heroFade 1.6s ease-in forwards;
 }
+
 
 .hero h1 {
   font-size: 2.5rem;
@@ -244,10 +259,26 @@ body.dark-mode .cta-box {
 
 /* ABOUT PAGE */
 .sub-hero {
-  background: linear-gradient(135deg, var(--trh-navy), #1d3557);
-  color: var(--trh-white);
+position: relative;
   text-align: center;
   padding: 70px 20px;
+  color: var(--trh-white);
+
+  /* IMAGE + SEMI-TRANSPARENT GRADIENT */
+  background: 
+    linear-gradient(
+      135deg, 
+      rgba(14, 2, 123, 0.7) 60%, /* navy with 70% opacity */
+      rgba(4, 1, 39, 0.7) 100% /* dark blue with 70% opacity */
+    ),
+    url("images/trh.jpg");
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  animation: heroFade 1.6s ease-in forwards;
+
 }
 
 .about-section {
