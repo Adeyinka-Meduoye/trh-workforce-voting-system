@@ -14,7 +14,7 @@ const organisations = [
   {
     name: "Music Organisation",
     description: "Vote for your Music Team Member of the Month",
-    url: "https://script.google.com/macros/s/AKfycbw6Ht5OhlwxhIN_hX8E3ZQJ43ldUPbWx_L-tgE8TKL9omFsKw6thSvUDdgcif7Zl3VBcQ/exec",
+    url: "https://script.google.com/macros/s/AKfycbwOQDlgDvkXiVbVL545m-ypZcByc9p8qhCEQGCIodi9eTncNzSGqDe_gDXCpCRNdZ0FyA/exec",
     bgImage: "images/music.jpg"
   },
   {
