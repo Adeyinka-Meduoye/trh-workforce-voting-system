@@ -116,4 +116,8 @@ if (scrollArrow) {
     const gridSection = document.getElementById("orgContainer");
     gridSection.scrollIntoView({ behavior: "smooth" });
   });
+
+    document.addEventListener("DOMContentLoaded", function () {
+    document.getElementById("currentYear").textContent = new Date().getFullYear();
+  });
 }
