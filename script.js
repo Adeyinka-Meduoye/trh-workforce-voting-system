@@ -117,6 +117,7 @@ if (scrollArrow) {
     gridSection.scrollIntoView({ behavior: "smooth" });
   });
 
+  // Display the current year in the UI
     document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("currentYear").textContent = new Date().getFullYear();
   });
