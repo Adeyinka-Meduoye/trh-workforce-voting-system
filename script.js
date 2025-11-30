@@ -26,7 +26,7 @@ const organisations = [
   {
     name: "Meet & Greet Department",
     description: "Vote for your Meet & Greet standout member",
-    url: "https://script.google.com/macros/s/AKfycbxdIglNR_kd3iHPiFXXExxTyjJmedmbWjO2p9AAPxDkQwxMeqPbIdR0JgAyrAKcPgLY9w/exec",
+    url: "https://script.google.com/macros/s/AKfycbw6Ht5OhlwxhIN_hX8E3ZQJ43ldUPbWx_L-tgE8TKL9omFsKw6thSvUDdgcif7Zl3VBcQ/exec",
     bgImage: "images/meetngreet.jpg"
   },
   {
