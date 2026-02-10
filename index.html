@@ -1,51 +1,88 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TRH Workforce – Team Member of the Month</title>
-  <link rel="stylesheet" href="style.css"/>
-  <link rel="icon" href="images/thechef.jpg" type="image/jpeg">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Primary Meta Tags -->
+    <title>TRH Workforce | Celebrating H.E.A.R.T</title>
+    <meta name="title" content="TRH Workforce | Celebrating H.E.A.R.T">
+    <meta name="description" content="A modern platform to honor and celebrate excellence within the TRH Global Workforce. Recognize commitment and elevate standards.">
+
+    <!-- Open Graph / Facebook / WhatsApp / LinkedIn -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://trh-workforce-voting-system.vercel.app/">
+    <meta property="og:title" content="TRH Workforce | Celebrating H.E.A.R.T">
+    <meta property="og:description" content="A modern platform to honor and celebrate excellence within the TRH Global Workforce. Recognize commitment and elevate standards.">
+    <meta property="og:image" content="https://i.postimg.cc/4yRFmpJw/TRH_logo.png">
+
+    <!-- Twitter / X -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://trh-workforce-voting-system.vercel.app/">
+    <meta property="twitter:title" content="TRH Workforce | Celebrating H.E.A.R.T">
+    <meta property="twitter:description" content="A modern platform to honor and celebrate excellence within the TRH Global Workforce. Recognize commitment and elevate standards.">
+    <meta property="twitter:image" content="https://i.postimg.cc/4yRFmpJw/TRH_logo.png">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="https://i.postimg.cc/4yRFmpJw/TRH_logo.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #020617;
+            color: #f9fafb;
+            margin: 0;
+            overflow-x: hidden;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        ::selection {
+            background: rgba(251, 140, 0, 0.3);
+            color: #fff;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.8s ease-out forwards;
+        }
+        /* Custom logo colors */
+        .text-trh-orange { color: #fb8c00; }
+        .bg-trh-orange { background-color: #fb8c00; }
+        .text-trh-red { color: #f04124; }
+        .bg-trh-red { background-color: #f04124; }
+        .bg-trh-navy { background-color: #1e145e; }
+        .border-trh-orange { border-color: #fb8c00; }
+        
+        /* Mask for hero image blending */
+        .mask-gradient {
+            -webkit-mask-image: radial-gradient(circle at center, black 0%, transparent 80%);
+            mask-image: radial-gradient(circle at center, black 0%, transparent 80%);
+        }
+    </style>
+    <script type="importmap">
+    {
+      "imports": {
+        "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+        "react/": "https://esm.sh/react@^19.2.4/",
+        "react": "https://esm.sh/react@^19.2.4"
+      }
+    }
+    </script>
+<link rel="stylesheet" href="/index.css">
 </head>
-
 <body>
-
-  <!-- DARK MODE TOGGLE -->
-  <div class="dark-toggle">
-    <label class="switch">
-      <input type="checkbox" id="darkModeSwitch">
-      <span class="slider round"></span>
-    </label>
-    <span></span>
-  </div>
-
-  <!-- HERO SECTION -->
-  <header class="hero fade-in">
-    <h1>TRH Workforce Team Member of the Month</h1>
-    <p>Honouring excellence. Celebrating commitment. Elevating God's Kingdom.</p>
-    <a href="about.html" class="hero-btn">About the Initiative</a>
-  </header>
-
-<!-- CALL-TO-ACTION SECTION -->
-<section class="cta-section fade-in">
-  <div class="cta-box">
-    <p>Oya, press dat arrow wey dey dance, den select the organisation wey u dey, and make u vote for person wey try wella dis month &#x1F60A</p>
-  </div>
-  <div class="down-arrow" id="scrollArrow">&#x25BC;</div>
-</section>
-
-  <!-- ORGANISATION GRID -->
-  <section class="grid fade-in" id="orgContainer"></section>
-
-  <!-- NOTIFICATION POPUP -->
-  <div id="notification" class="notification">Redirecting to organisation voting page...</div>
-
-  <!-- FOOTER -->
-  <footer class="footer">
-    <p class="mb-1">© <span id="currentYear"></span> All Rights Reserved | TRH Global Workforce</p>
-    <p>Developed by Medus</p>
-  </footer>
-
-  <script src="script.js"></script>
+    <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>
