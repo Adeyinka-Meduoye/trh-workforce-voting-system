@@ -35,7 +35,7 @@ const Header: React.FC<Props> = ({ currentView, setView }) => {
               className="w-full h-full object-contain filter drop-shadow-md"
               onError={(e) => {
                 // Fallback if image fails to load during transition
-                (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&q=80&w=100";
+                (e.target as HTMLImageElement).src = "https://i.postimg.cc/4yRFmpJw/TRH_logo.png";
               }}
             />
           </div>
