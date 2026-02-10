@@ -55,7 +55,7 @@ export const organisations: Organisation[] = [
 export const winners: Winner[] = [
   {
     name: "Emmanuella Oghenetega Andre",
-    org: "Meet & Greet Department",
+    org: "Protocol (Meet & Greet) Organisation",
     month: "January",
     year: 2026,
     image: "/images/January2026.png"
