@@ -136,7 +136,7 @@ const App: React.FC = () => {
 
           <nav className="flex justify-center gap-6 mb-12">
             <button onClick={() => handleViewChange(View.HOME)} className="text-xs font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors">Vote</button>
-            <button onClick={() => handleViewChange(View.ABOUT)} className="text-xs font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors">About Us</button>
+            <button onClick={() => handleViewChange(View.ABOUT)} className="text-xs font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors">About</button>
             <button onClick={() => handleViewChange(View.WINNERS)} className="text-xs font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors">Hall of Fame</button>
           </nav>
 
