@@ -6,12 +6,6 @@ Each organisation runs a monthly internal team-member voting process.
 Winners from each organisation automatically advance to a final workforce-wide selection.
 The Workforce Team Member of the Month selected by the Workforce Recognition Committee is honoured, celebrated, and showcased globally.
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/drive/1vgk6yKbrcfapatgFv6BexrHyktyGKHWg
-
 ## Run Locally
 
 **Prerequisites:**  Node.js
