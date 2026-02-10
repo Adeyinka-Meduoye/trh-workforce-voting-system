@@ -38,6 +38,7 @@
             color: #f9fafb;
             margin: 0;
             overflow-x: hidden;
+            scroll-behavior: smooth;
         }
         .glass {
             background: rgba(255, 255, 255, 0.03);
@@ -48,13 +49,32 @@
             background: rgba(251, 140, 0, 0.3);
             color: #fff;
         }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
+        @keyframes slideUpFade {
+          from { 
+            opacity: 0; 
+            transform: translateY(30px); 
+          }
+          to { 
+            opacity: 1; 
+            transform: translateY(0); 
+          }
         }
-        .animate-fade-in {
-          animation: fadeIn 0.8s ease-out forwards;
+        .animate-hero-reveal {
+          opacity: 0;
+          animation: slideUpFade 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
+
+        /* Scroll Reveal Utility */
+        .reveal {
+          opacity: 0;
+          transform: translateY(30px);
+          transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .reveal.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        
         /* Custom logo colors */
         .text-trh-orange { color: #fb8c00; }
         .bg-trh-orange { background-color: #fb8c00; }
@@ -78,11 +98,9 @@
       }
     }
     </script>
-<link rel="stylesheet" href="/index.css">
 </head>
 <body>
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
-<script type="module" src="/index.tsx"></script>
 </body>
 </html>

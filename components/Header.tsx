@@ -12,13 +12,23 @@ const Header: React.FC<Props> = ({ currentView, setView }) => {
 
   const menuItems = [
     { label: 'Vote', view: View.HOME },
-    { label: 'Winners', view: View.WINNERS },
+    { label: 'Winners', view: View.WINNERS, scrollId: 'hall-of-fame' },
     { label: 'About', view: View.ABOUT },
   ];
 
-  const handleNav = (view: View) => {
-    setView(view);
+  const handleNav = (item: typeof menuItems[0]) => {
+    setView(item.view);
     setIsMenuOpen(false);
+    
+    // If it's a scroll-specific navigation
+    if (item.scrollId) {
+      setTimeout(() => {
+        const element = document.getElementById(item.scrollId!);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    }
   };
 
   return (
@@ -26,7 +36,7 @@ const Header: React.FC<Props> = ({ currentView, setView }) => {
       <div className="max-w-7xl mx-auto flex items-center justify-between glass rounded-2xl sm:rounded-3xl px-4 sm:px-6 py-3 transition-all duration-300">
         <div 
           className="flex items-center gap-3 cursor-pointer group"
-          onClick={() => handleNav(View.HOME)}
+          onClick={() => handleNav(menuItems[0])}
         >
           <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center transition-transform group-hover:scale-110">
             <img 
@@ -34,7 +44,6 @@ const Header: React.FC<Props> = ({ currentView, setView }) => {
               alt="TRH Logo" 
               className="w-full h-full object-contain filter drop-shadow-md"
               onError={(e) => {
-                // Fallback if image fails to load during transition
                 (e.target as HTMLImageElement).src = "https://i.postimg.cc/4yRFmpJw/TRH_logo.png";
               }}
             />
@@ -49,7 +58,7 @@ const Header: React.FC<Props> = ({ currentView, setView }) => {
           {menuItems.map((item) => (
             <button 
               key={item.view}
-              onClick={() => handleNav(item.view)}
+              onClick={() => handleNav(item)}
               className={`text-sm px-4 py-2 rounded-xl font-bold transition-all duration-300 ${
                 currentView === item.view 
                   ? 'bg-[#fb8c00] text-[#1e145e] shadow-lg shadow-orange-500/30 scale-105' 
@@ -78,7 +87,7 @@ const Header: React.FC<Props> = ({ currentView, setView }) => {
           {menuItems.map((item) => (
             <button 
               key={item.view}
-              onClick={() => handleNav(item.view)}
+              onClick={() => handleNav(item)}
               className={`text-2xl font-black tracking-tighter transition-all ${
                 currentView === item.view ? 'text-[#fb8c00]' : 'text-gray-400'
               }`}

@@ -4,6 +4,7 @@ import Header from './components/Header';
 import OrgCard from './components/OrgCard';
 import AboutView from './components/AboutView';
 import WinnersView from './components/WinnersView';
+import ScrollReveal from './components/ScrollReveal';
 import { organisations } from './services/data';
 import { View } from './types';
 
@@ -11,7 +12,10 @@ const App: React.FC = () => {
   const [view, setView] = useState<View>(View.HOME);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Only scroll to top if we didn't just trigger a specific scroll-to-id in the Header
+    if (view !== View.WINNERS) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, [view]);
 
   return (
@@ -26,11 +30,11 @@ const App: React.FC = () => {
       <main className="pt-24 sm:pt-32 pb-24 relative">
         {view === View.HOME && (
           <>
-            <section className="relative w-full max-w-6xl mx-auto px-4 sm:px-6 mb-16 sm:mb-24 animate-fade-in">
+            <section className="relative w-full max-w-6xl mx-auto px-4 sm:px-6 mb-16 sm:mb-24">
               {/* Hero Background Image Container */}
               <div className="absolute inset-0 z-[-1] rounded-[3rem] overflow-hidden opacity-30 mask-gradient">
                 <img 
-                  src="/images/trh.jpg" 
+                  src="https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&q=80&w=2000" 
                   alt="Workforce Background" 
                   className="w-full h-full object-cover scale-110"
                 />
@@ -38,23 +42,25 @@ const App: React.FC = () => {
               </div>
 
               <div className="text-center py-12 sm:py-24">
-                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#fb8c00]/10 border border-[#fb8c00]/20 text-[#fb8c00] text-[10px] sm:text-xs font-black mb-6 sm:mb-8 tracking-widest uppercase">
-                  <span>✨ Celebrating H.E.A.R.T</span>
+                <div className="animate-hero-reveal [animation-delay:100ms] inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#fb8c00]/10 border border-[#fb8c00]/20 text-[#fb8c00] text-[10px] sm:text-xs font-black mb-6 sm:mb-8 tracking-widest uppercase">
+                  <span>✨ Celebrating Commitment</span>
                 </div>
-                <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter mb-8 leading-[1.1] sm:leading-[0.85] px-2">
+                
+                <h1 className="animate-hero-reveal [animation-delay:300ms] text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter mb-8 leading-[1.1] sm:leading-[0.85] px-2">
                   TRH Workforce <br className="hidden sm:block" />
                   <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#fb8c00] via-white to-[#f04124]">
                     Team Member of the Month
                   </span>
                 </h1>
-                <p className="text-base sm:text-xl text-gray-400 max-w-2xl mx-auto mb-10 sm:mb-14 leading-relaxed font-medium">
+                
+                <p className="animate-hero-reveal [animation-delay:500ms] text-base sm:text-xl text-gray-400 max-w-2xl mx-auto mb-10 sm:mb-14 leading-relaxed font-medium">
                   Honouring excellence. Celebrating commitment. Elevating God's Kingdom. Choose your organization 
                   and cast your vote to recognize outstanding service.
                 </p>
                 
                 <button 
                   onClick={() => document.getElementById('grid')?.scrollIntoView({ behavior: 'smooth' })}
-                  className="group flex flex-col items-center gap-4 mx-auto"
+                  className="animate-hero-reveal [animation-delay:700ms] group flex flex-col items-center gap-4 mx-auto"
                 >
                   <p className="text-[10px] uppercase tracking-[0.4em] text-gray-600 font-black group-hover:text-white transition-colors">Select Organisation</p>
                   <div className="w-7 h-12 border-2 border-white/10 rounded-full p-1.5 flex justify-center group-hover:border-[#fb8c00]/50 transition-colors">
@@ -67,7 +73,9 @@ const App: React.FC = () => {
             <section id="grid" className="max-w-7xl mx-auto px-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
                 {organisations.map((org, i) => (
-                  <OrgCard key={i} org={org} />
+                  <ScrollReveal key={i} delay={i * 50}>
+                    <OrgCard org={org} />
+                  </ScrollReveal>
                 ))}
               </div>
             </section>
