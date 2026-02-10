@@ -1,4 +1,3 @@
-
 import React from 'react';
 import ScrollReveal from './ScrollReveal';
 
@@ -6,7 +5,7 @@ const AboutView: React.FC = () => {
   return (
     <section className="max-w-4xl mx-auto px-6 py-12">
       <ScrollReveal className="text-center mb-16">
-        <h2 className="text-5xl font-black mb-6 bg-clip-text text-transparent bg-gradient-to-r from-[#fb8c00] to-white tracking-tighter">
+        <h2 className="text-5xl font-black mb-6 tracking-tighter animate-color-cycle">
           Excellence is Our Standard
         </h2>
         <p className="text-gray-400 text-lg font-medium">Elevating standards through recognition and intentional rewards.</p>

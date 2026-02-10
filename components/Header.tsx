@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { View } from '../types';
 
@@ -40,7 +39,7 @@ const Header: React.FC<Props> = ({ currentView, setView }) => {
         >
           <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center transition-transform group-hover:scale-110">
             <img 
-              src="/images/logo-trans.png" 
+              src="https://i.postimg.cc/4yRFmpJw/TRH_logo.png" 
               alt="TRH Logo" 
               className="w-full h-full object-contain filter drop-shadow-md"
               onError={(e) => {

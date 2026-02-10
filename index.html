@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -8,20 +7,20 @@
     <!-- Primary Meta Tags -->
     <title>TRH Workforce | Celebrating H.E.A.R.T</title>
     <meta name="title" content="TRH Workforce | Celebrating H.E.A.R.T">
-    <meta name="description" content="A modern platform to honor and celebrate excellence within the TRH Global Workforce. Recognize commitment and elevate standards.">
+    <meta name="description" content="We created this to honor and celebrate excellence within the TRH Global Workforce. Recognize commitment and elevate standards.">
 
     <!-- Open Graph / Facebook / WhatsApp / LinkedIn -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://trh-workforce-voting-system.vercel.app/">
     <meta property="og:title" content="TRH Workforce | Celebrating H.E.A.R.T">
-    <meta property="og:description" content="A modern platform to honor and celebrate excellence within the TRH Global Workforce. Recognize commitment and elevate standards.">
+    <meta property="og:description" content="We created this to  to honor and celebrate excellence within the TRH Global Workforce. Recognize commitment and elevate standards.">
     <meta property="og:image" content="https://i.postimg.cc/4yRFmpJw/TRH_logo.png">
 
     <!-- Twitter / X -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://trh-workforce-voting-system.vercel.app/">
     <meta property="twitter:title" content="TRH Workforce | Celebrating H.E.A.R.T">
-    <meta property="twitter:description" content="A modern platform to honor and celebrate excellence within the TRH Global Workforce. Recognize commitment and elevate standards.">
+    <meta property="twitter:description" content="We created this to  to honor and celebrate excellence within the TRH Global Workforce. Recognize commitment and elevate standards.">
     <meta property="twitter:image" content="https://i.postimg.cc/4yRFmpJw/TRH_logo.png">
 
     <!-- Favicon -->
@@ -59,9 +58,34 @@
             transform: translateY(0); 
           }
         }
+        
+        /* Left to Right Color Sweep Animation */
+        @keyframes colorCycle {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+        
         .animate-hero-reveal {
           opacity: 0;
           animation: slideUpFade 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        
+        .animate-color-cycle {
+          display: inline-block;
+          background: linear-gradient(
+            to right, 
+            #fb8c00 0%, 
+            #f04124 25%, 
+            #818cf8 50%, 
+            #f04124 75%, 
+            #fb8c00 100%
+          );
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          color: transparent;
+          animation: colorCycle 6s linear infinite;
         }
 
         /* Scroll Reveal Utility */

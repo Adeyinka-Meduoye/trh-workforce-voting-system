@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { winners } from '../services/data';
 import ScrollReveal from './ScrollReveal';
@@ -7,7 +6,7 @@ const WinnersView: React.FC = () => {
   const handleShare = async (winner: typeof winners[0]) => {
     const shareData = {
       title: 'TRH Workforce Winner',
-      text: `Celebrating ${winner.name} as the ${winner.month} ${winner.year} Team Member of the Month in ${winner.org}!`,
+      text: `Celebrating ${winner.name} from the ${winner.org} as the Workforce Team Member of the Month in ${winner.month} ${winner.year}!`,
       url: window.location.href,
     };
 
@@ -30,9 +29,11 @@ const WinnersView: React.FC = () => {
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#fb8c00]/10 border border-[#fb8c00]/20 text-[#fb8c00] text-xs font-black mb-6 tracking-widest uppercase">
           🏆 Hall of Fame
         </div>
-        <h2 className="text-5xl font-black tracking-tighter mb-4 bg-clip-text text-transparent bg-gradient-to-r from-[#fb8c00] via-white to-[#f04124]">
+        <div>
+          <h2 className="text-5xl font-black tracking-tighter mb-4 animate-color-cycle">
           Previous Winners
         </h2>
+        </div>
         <p className="text-gray-400 text-lg font-medium">Recognizing consistent excellence in our workforce.</p>
       </ScrollReveal>
 
