@@ -6,7 +6,7 @@ const WinnersView: React.FC = () => {
   const handleShare = async (winner: typeof winners[0]) => {
     const shareData = {
       title: 'TRH Workforce Winner',
-      text: `Celebrating ${winner.name} from the ${winner.org} as the Workforce Team Member of the Month in ${winner.month} ${winner.year}!`,
+      text: `Celebrating ${winner.name} from the ${winner.org} as the Workforce Team Member of the Month for ${winner.month} ${winner.year}!`,
       url: window.location.href,
     };
 
