@@ -155,7 +155,7 @@ const App: React.FC = () => {
 
             <div className="flex flex-col items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
               <p className="text-[9px] font-bold text-gray-600 uppercase tracking-[0.3em]">Developed By</p>
-              <p className="text-[11px] font-black text-gray-500 tracking-tighter">Developed by TRH INNOVATION & TECHNOLOGY</p>
+              <p className="text-[11px] font-black text-gray-500 tracking-tighter">TRH INNOVATION & TECHNOLOGY ORGANIZATION</p>
             </div>
           </div>
         </div>
