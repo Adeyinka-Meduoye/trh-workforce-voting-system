@@ -53,6 +53,13 @@ export const organisations: Organisation[] = [
 ];
 
 export const winners: Winner[] = [
+    {
+    name: "Erogbogbo Precious Boluwatife",
+    org: "Sanctuary Organisation",
+    month: "March",
+    year: 2026,
+    image: "/images/March2026.png"
+  },
   {
     name: "Ebere Onyebigwu",
     org: "Media Organisation",
