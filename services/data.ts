@@ -38,6 +38,18 @@ export const organisations: Organisation[] = [
     url: "https://script.google.com/macros/s/AKfycbzW6-vawBW-8Li5Yd1pzOHMMBeYoDqnNM1JamBN5PxGd9u1IsCH7MMfV4HGk91jlZakXg/exec",
     bgImage: "images/hospitality.jpg"
   },
+{
+  name: "Children Department",
+  description: "A joyful space for children to learn and grow.",
+  url: "https://script.google.com/macros/s/AKfycbz0gudKcx9c36JTDOsgjQXYUNDkOelYAIiLHALoXe0bpGBFm6FsEWvBUGE0z6Tx9Ctmbg/exec",
+  bgImage: "/images/children.png"
+},
+{
+  name: "Medical Organisation",
+  description: "Celebrating and supporting our caregivers and health professionals.",
+  url: "https://script.google.com/macros/s/AKfycby8VRquQfLNASJzyVhUHRYKY3HavvmUY-DYaxMrqzgS33haf96Za1Af29LALkHs_43AsQ/exec",
+  bgImage: "/images/medical.png"
+},
   {
     name: "Traffic, Security & Surveillance Organisation",
     description: "Acknowledge the guardians of safety and order.",
@@ -53,7 +65,7 @@ export const organisations: Organisation[] = [
 ];
 
 export const winners: Winner[] = [
-    {
+  {
     name: "Erogbogbo Precious Boluwatife",
     org: "Sanctuary Organisation",
     month: "March",
