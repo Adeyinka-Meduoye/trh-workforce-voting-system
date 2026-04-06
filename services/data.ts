@@ -46,7 +46,7 @@ export const organisations: Organisation[] = [
 },
 {
   name: "Medical Organisation",
-  description: "Celebrating and supporting our caregivers and health professionals.",
+  description: "Celebrating our caregivers and health professionals.",
   url: "https://script.google.com/macros/s/AKfycby8VRquQfLNASJzyVhUHRYKY3HavvmUY-DYaxMrqzgS33haf96Za1Af29LALkHs_43AsQ/exec",
   bgImage: "/images/medical.png"
 },
