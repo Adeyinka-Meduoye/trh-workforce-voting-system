@@ -65,9 +65,23 @@ export const organisations: Organisation[] = [
 ];
 
 export const winners: Winner[] = [
+    {
+    name: "Olanihun Tolani & Beata Blessing",
+    org: "Media Organisation & Children Department",
+    month: "May",
+    year: 2026,
+    image: "/images/May2026.png"
+  },
+    {
+    name: "Oris Faith Sagay",
+    org: "Music (WinePress) Organisation",
+    month: "April",
+    year: 2026,
+    image: "/images/April2026.png"
+  },
   {
     name: "Erogbogbo Precious Boluwatife",
-    org: "Sanctuary Organisation",
+    org: "Sanctuary (VineDressers) Organisation",
     month: "March",
     year: 2026,
     image: "/images/March2026.png"
@@ -95,7 +109,7 @@ export const winners: Winner[] = [
   },
   {
     name: "Michael Olamide Aina",
-    org: "Sanctuary Organisation",
+    org: "Sanctuary (VineDressers) Organisation",
     month: "November",
     year: 2025,
     image: "/images/November2025.png"
