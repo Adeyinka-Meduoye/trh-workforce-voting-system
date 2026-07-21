@@ -65,6 +65,13 @@ export const organisations: Organisation[] = [
 ];
 
 export const winners: Winner[] = [
+      {
+    name: "Nzedeh Marvelous Uche  & Henry Chinedu",
+    org: "Music (WinePress) Organisation & Protocol (Ushering) Organisation",
+    month: "June",
+    year: 2026,
+    image: "/images/June2026.png"
+  },
     {
     name: "Olanihun Tolani & Beata Blessing",
     org: "Media Organisation & Children Department",
