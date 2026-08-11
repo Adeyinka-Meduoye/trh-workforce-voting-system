@@ -65,6 +65,13 @@ export const organisations: Organisation[] = [
 ];
 
 export const winners: Winner[] = [
+        {
+    name: "Deborah Aniebiet Ekanem",
+    org: "Sanctuary (VineDressers) Organisation",
+    month: "July",
+    year: 2026,
+    image: "/images/July2026.jpg"
+  },
       {
     name: "Nzedeh Marvelous Uche  & Henry Chinedu",
     org: "Music (WinePress) Organisation & Protocol (Ushering) Organisation",
