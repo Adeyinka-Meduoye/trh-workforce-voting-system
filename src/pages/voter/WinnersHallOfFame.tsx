@@ -843,7 +843,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-1 text-xs">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[#F8FAFC]">
                             <Building2 className="w-3.5 h-3.5 text-[#FF8A00] shrink-0" />
-                            <strong className="truncate max-w-[130px] sm:max-w-[160px]">{record.organisationName}</strong>
+                            <strong className="font-semibold text-[#F8FAFC]">{record.organisationName}</strong>
                           </span>
 
                           {record.departmentName && (
