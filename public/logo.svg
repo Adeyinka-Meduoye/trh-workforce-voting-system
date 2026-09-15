@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#251464" />
+      <stop offset="50%" stop-color="#1E1050" />
+      <stop offset="100%" stop-color="#0F0826" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFB347" />
+      <stop offset="50%" stop-color="#FF8A00" />
+      <stop offset="100%" stop-color="#E85B00" />
+    </linearGradient>
+    <linearGradient id="innerGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <!-- Background Shield Shape -->
+  <path d="M100 15 C145 15, 175 32, 175 75 C175 130, 130 170, 100 185 C70 170, 25 130, 25 75 C25 32, 55 15, 100 15 Z"
+        fill="url(#shieldGrad)"
+        stroke="url(#goldGrad)"
+        stroke-width="5"
+        filter="url(#dropShadow)" />
+
+  <!-- Inner Highlight -->
+  <path d="M100 22 C138 22, 165 37, 165 75 C165 124, 126 160, 100 174 C74 160, 35 124, 35 75 C35 37, 62 22, 100 22 Z"
+        fill="url(#innerGlow)" />
+
+  <!-- Crown / Flame Motif at top of shield -->
+  <path d="M72 65 L82 85 L100 55 L118 85 L128 65 L122 95 L78 95 Z"
+        fill="url(#goldGrad)" />
+  <circle cx="72" cy="62" r="3" fill="#FFE5B4" />
+  <circle cx="100" cy="51" r="3.5" fill="#FFE5B4" />
+  <circle cx="128" cy="62" r="3" fill="#FFE5B4" />
+
+  <!-- Central Emblem: Cross & Heart -->
+  <!-- Cross -->
+  <rect x="94" y="85" width="12" height="48" rx="3" fill="url(#goldGrad)" />
+  <rect x="80" y="97" width="40" height="12" rx="3" fill="url(#goldGrad)" />
+
+  <!-- Core Heart Shape in Center of Cross -->
+  <path d="M100 109 C96 103, 88 103, 88 109 C88 115, 100 123, 100 123 C100 123, 112 115, 112 109 C112 103, 104 103, 100 109 Z"
+        fill="#FFFFFF" />
+
+  <!-- TRH Monogram Ribbon / Text -->
+  <text x="100" y="156"
+        text-anchor="middle"
+        font-family="'Inter', -apple-system, sans-serif"
+        font-weight="900"
+        font-size="20"
+        letter-spacing="2"
+        fill="#FFFFFF">
+    TRH
+  </text>
+  <text x="100" y="167"
+        text-anchor="middle"
+        font-family="'Inter', -apple-system, sans-serif"
+        font-weight="700"
+        font-size="8"
+        letter-spacing="1.5"
+        fill="#FF8A00">
+    MINISTRIES
+  </text>
+</svg>

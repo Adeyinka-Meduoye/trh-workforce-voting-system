@@ -1,0 +1,201 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --brand-primary: #251464;
+    --brand-secondary: #FF8A00;
+    --brand-accent: #E85B00;
+    --dark-bg: #0F172A;
+    --dark-card: #1E293B;
+    --dark-input: #334155;
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+  }
+
+  body {
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: #0F172A;
+    color: #F8FAFC;
+  }
+}
+
+/* Continuous shimmer keyframe */
+@keyframes shimmer-right {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/* Subtle silver/grey gradient shimmer for "TRH Workforce" */
+.animate-gradient-grey {
+  background: linear-gradient(90deg, #ffffff, #d1d5db, #4b5563, #d1d5db, #ffffff);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: shimmer-right 8s linear infinite;
+}
+
+/* Warm purple & amber gradient shimmer for "Cast Your Vote for Kingdom Excellence" */
+.animate-gradient-right {
+  background: linear-gradient(90deg, #2a1b5e, #f69d1a, #e85615, #f69d1a, #2a1b5e);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: shimmer-right 8s linear infinite;
+}
+
+/* Animated button background for "View Winners" (matching "Cast Your Vote for Kingdom Excellence") */
+.btn-animate-kingdom-gradient {
+  background: linear-gradient(90deg, #251464 0%, #f69d1a 25%, #e85615 50%, #f69d1a 75%, #251464 100%);
+  background-size: 200% auto;
+  animation: shimmer-right 6s linear infinite;
+}
+
+/* Animated button background for "About" (matching "TRH Workforce") */
+.btn-animate-grey-gradient {
+  background: linear-gradient(90deg, #1e293b 0%, #475569 25%, #64748b 50%, #475569 75%, #1e293b 100%);
+  background-size: 200% auto;
+  animation: shimmer-right 6s linear infinite;
+}
+
+.font-display {
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.gradient-brand {
+  background: linear-gradient(135deg, #251464 0%, #FF8A00 50%, #E85B00 100%);
+}
+
+.gradient-brand-subtle {
+  background: linear-gradient(135deg, rgba(37, 20, 100, 0.6) 0%, rgba(255, 138, 0, 0.15) 100%);
+}
+
+.gradient-brand-purple {
+  background: linear-gradient(135deg, #251464 0%, #3b209e 100%);
+}
+
+.gradient-brand-orange {
+  background: linear-gradient(135deg, #FF8A00 0%, #E85B00 100%);
+}
+
+/* Custom scrollbar styling for dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0F172A;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 138, 0, 0.45);
+}
+
+@keyframes shrinkWidth {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes floatGentle {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+
+@keyframes goldPulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 138, 0, 0.25), 0 0 40px rgba(255, 138, 0, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(255, 138, 0, 0.45), 0 0 70px rgba(255, 138, 0, 0.2);
+  }
+}
+
+@keyframes rayRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-float-gentle {
+  animation: floatGentle 6s ease-in-out infinite;
+}
+
+.animate-gold-pulse {
+  animation: goldPulse 4s ease-in-out infinite;
+}
+
+.animate-ray-rotate {
+  animation: rayRotate 24s linear infinite;
+}
+
+.gold-halo {
+  box-shadow: 0 0 30px rgba(255, 138, 0, 0.35);
+}
+
+/* Printable Certificate Media Query */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  /* Hide navigation, sidebars, headers, and backgrounds */
+  nav, header, aside, .btn-animate-grey-gradient, button, .no-print {
+    display: none !important;
+  }
+
+  #award-certificate-printable {
+    border: 2px solid #b45309 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  #award-certificate-printable * {
+    color: #0f172a !important;
+  }
+
+  #award-certificate-printable h2 {
+    color: #0f172a !important;
+  }
+}

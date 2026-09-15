@@ -1,6 +1,6 @@
-
 {
-  "name": "TRH Workforce - Excellence Rewards",
-  "description": "A modern platform to honor and celebrate excellence within the TRH Global Workforce.",
-  "requestFramePermissions": []
+  "name": "TRH Workforce Voting System",
+  "description": "Church-Wide Recognition and Ballot Portal for TRH Ministries Global Workforce, celebrating kingdom excellence across ministry leaders, workers, teams, and departments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

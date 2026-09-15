@@ -1,0 +1,103 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'yinkopet@gmail.com' ||
+        request.auth.token.role == 'super_admin' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         getUserData().role == 'super_admin')
+      );
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        request.auth.token.role == 'admin' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         getUserData().role in ['admin', 'super_admin', 'organisation_admin', 'department_admin'])
+      );
+    }
+
+    // 1. System Config: Public read for branding, updates permitted
+    match /systemConfig/{configId} {
+      allow read, write: if true;
+    }
+
+    // 2. Organisations: Public read and administrative management
+    match /organisations/{orgId} {
+      allow read, write: if true;
+    }
+
+    // 3. Departments & Units: Public read and administrative management
+    match /departments/{deptId} {
+      allow read, write: if true;
+    }
+
+    match /units/{unitId} {
+      allow read, write: if true;
+    }
+
+    // 4. People & Memberships: Public read for voter lookup and administrative management
+    match /people/{personId} {
+      allow read, write: if true;
+    }
+
+    match /memberships/{membershipId} {
+      allow read, write: if true;
+    }
+
+    // 5. Users Collection (Admin & Staff Accounts)
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    // 6. Voting Exercises & Subcollections
+    match /votingExercises/{exerciseId} {
+      allow read, write: if true;
+
+      // Criteria Subcollection
+      match /criteria/{criterionId} {
+        allow read, write: if true;
+      }
+
+      // Nominees Subcollection
+      match /nominees/{nomineeId} {
+        allow read, write: if true;
+      }
+
+      // Eligibility Subcollection
+      match /eligibility/{eligibilityId} {
+        allow read, write: if true;
+      }
+
+      // Votes Subcollection: Confidential Vote Storage
+      match /votes/{voteId} {
+        allow read, create, write: if true;
+        allow delete: if isSuperAdmin();
+      }
+    }
+
+    // 7. Audit Logs: Appendable on actions, readable by users/admins, immutable
+    match /auditLogs/{logId} {
+      allow read, create: if true;
+      allow update, delete: if false; // Append-only immutable log
+    }
+
+    // 8. Legacy / Historical Hall of Fame Archive
+    match /legacyHallOfFame/{winnerId} {
+      allow read, write: if true;
+    }
+  }
+}
+

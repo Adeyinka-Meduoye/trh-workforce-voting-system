@@ -1,130 +1,62 @@
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- Primary Meta Tags -->
-    <title>TRH Workforce | Celebrating H.E.A.R.T</title>
-    <meta name="title" content="TRH Workforce | Celebrating H.E.A.R.T">
-    <meta name="description" content="To honor and celebrate excellence within the TRH Global Workforce. Recognize commitment and elevate standards.">
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TRH Workforce Recognition & Voting System</title>
+    <meta name="description" content="Church-Wide Recognition and Ballot Portal for TRH Ministries Global Workforce, celebrating kingdom excellence across ministry leaders, workers, teams, and departments." />
 
-    <!-- Open Graph / Facebook / WhatsApp / LinkedIn -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://trh-workforce-voting-system.vercel.app/">
-    <meta property="og:title" content="TRH Workforce | Celebrating H.E.A.R.T">
-    <meta property="og:description" content="To honor and celebrate excellence within the TRH Global Workforce. Recognize commitment and elevate standards.">
-    <meta property="og:image" content="https://i.postimg.cc/4yRFmpJw/TRH_logo.png">
+    <!-- Favicon & Touch Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/logo.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/trh-official-logo.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/trh-official-logo.png" />
+    <link rel="shortcut icon" href="/logo.png" />
 
-    <!-- Twitter / X -->
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://trh-workforce-voting-system.vercel.app/">
-    <meta property="twitter:title" content="TRH Workforce | Celebrating H.E.A.R.T">
-    <meta property="twitter:description" content="To honor and celebrate excellence within the TRH Global Workforce. Recognize commitment and elevate standards.">
-    <meta property="twitter:image" content="https://i.postimg.cc/4yRFmpJw/TRH_logo.png">
+    <!-- Facebook & Open Graph Meta Tags -->
+    <meta property="og:site_name" content="TRH Ministries Global" />
+    <meta property="og:title" content="TRH Workforce Recognition & Voting System" />
+    <meta property="og:description" content="Church-Wide Recognition and Ballot Portal for TRH Ministries Global Workforce, celebrating kingdom excellence across ministry leaders, workers, teams, and departments." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://ais-dev-jy5fwzfbmkomrkwfknlkh5-7594041143.europe-west3.run.app" />
+    <meta property="og:image" content="https://i.postimg.cc/4yRFmpJw/TRH-logo.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="TRH Ministries Global Official Workforce Emblem" />
+    <meta property="fb:app_id" content="trhministriesglobal" />
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="https://i.postimg.cc/4yRFmpJw/TRH_logo.png">
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@TRHMinistries" />
+    <meta name="twitter:creator" content="@TRHMinistries" />
+    <meta name="twitter:title" content="TRH Workforce Recognition & Voting System" />
+    <meta name="twitter:description" content="Church-Wide Recognition and Ballot Portal for TRH Ministries Global Workforce, celebrating kingdom excellence across ministry leaders, workers, teams, and departments." />
+    <meta name="twitter:image" content="https://i.postimg.cc/4yRFmpJw/TRH-logo.png" />
+    <meta name="twitter:image:alt" content="TRH Workforce Recognition and Hall of Fame" />
 
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- LinkedIn Meta Tags -->
+    <meta name="author" content="TRH Ministries Global" />
+    <meta property="linkedin:owner" content="TRH Ministries Global" />
+    <meta name="image" property="og:image" content="https://i.postimg.cc/4yRFmpJw/TRH-logo.png" />
+
+    <!-- Instagram Meta Tags -->
+    <meta property="instagram:card" content="summary" />
+    <meta property="instagram:site" content="@trhministries" />
+    <meta name="instagram:title" content="TRH Workforce Recognition & Hall of Fame" />
+    <meta name="instagram:description" content="Celebrating faithfulness and kingdom honors at TRH Ministries Global." />
+    <meta name="instagram:image" content="https://i.postimg.cc/4yRFmpJw/TRH-logo.png" />
+
+    <!-- GraphQL API & Schema Discovery -->
+    <link rel="schema.graphql" type="application/graphql" href="/api/graphql" title="GraphQL Schema Definition" />
+    <meta name="graphql-endpoint" content="/api/graphql" />
+    <meta name="api:graphql" content="/api/graphql" />
+    <link rel="alternate" type="application/graphql+json" href="/api/graphql" title="TRH GraphQL Service" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #020617;
-            color: #f9fafb;
-            margin: 0;
-            overflow-x: hidden;
-            scroll-behavior: smooth;
-        }
-        .glass {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        ::selection {
-            background: rgba(251, 140, 0, 0.3);
-            color: #fff;
-        }
-        @keyframes slideUpFade {
-          from { 
-            opacity: 0; 
-            transform: translateY(30px); 
-          }
-          to { 
-            opacity: 1; 
-            transform: translateY(0); 
-          }
-        }
-        
-        /* Left to Right Color Sweep Animation */
-        @keyframes colorCycle {
-          0% { background-position: 0% 50%; }
-          100% { background-position: 200% 50%; }
-        }
-        
-        .animate-hero-reveal {
-          opacity: 0;
-          animation: slideUpFade 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        
-        .animate-color-cycle {
-          display: inline-block;
-          background: linear-gradient(
-            to right, 
-            #fb8c00 0%, 
-            #f04124 25%, 
-            #818cf8 50%, 
-            #f04124 75%, 
-            #fb8c00 100%
-          );
-          background-size: 200% auto;
-          -webkit-background-clip: text;
-          background-clip: text;
-          -webkit-text-fill-color: transparent;
-          color: transparent;
-          animation: colorCycle 6s linear infinite;
-        }
-
-        /* Scroll Reveal Utility */
-        .reveal {
-          opacity: 0;
-          transform: translateY(30px);
-          transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .reveal.visible {
-          opacity: 1;
-          transform: translateY(0);
-        }
-        
-        /* Custom logo colors */
-        .text-trh-orange { color: #fb8c00; }
-        .bg-trh-orange { background-color: #fb8c00; }
-        .text-trh-red { color: #f04124; }
-        .bg-trh-red { background-color: #f04124; }
-        .bg-trh-navy { background-color: #1e145e; }
-        .border-trh-orange { border-color: #fb8c00; }
-        
-        /* Mask for hero image blending */
-        .mask-gradient {
-            -webkit-mask-image: radial-gradient(circle at center, black 0%, transparent 80%);
-            mask-image: radial-gradient(circle at center, black 0%, transparent 80%);
-        }
-    </style>
-    <script type="importmap">
-    {
-      "imports": {
-        "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-        "react/": "https://esm.sh/react@^19.2.4/",
-        "react": "https://esm.sh/react@^19.2.4"
-      }
-    }
-    </script>
-</head>
-<body>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" crossorigin="anonymous">
+  </head>
+  <body class="bg-[#0F172A] text-[#F8FAFC] font-sans antialiased selection:bg-[#FF8A00]/30 selection:text-[#FF8A00]">
     <div id="root"></div>
-    <script type="module" src="index.tsx"></script>
-</body>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
+

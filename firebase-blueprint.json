@@ -1,0 +1,291 @@
+{
+  "entities": {
+    "Organisation": {
+      "title": "Organisation",
+      "description": "Church ministries, auxiliary bodies, and operational organisations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "description": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive", "archived"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name", "status"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "Sub-departments or ministry wings under an organisation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organisationId": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive", "archived"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["organisationId", "name", "status"]
+    },
+    "Unit": {
+      "title": "Unit",
+      "description": "Operational service units situated directly under a department",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "departmentName": { "type": "string" },
+        "organisationId": { "type": "string" },
+        "organisationName": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "code": { "type": "string" },
+        "description": { "type": "string" },
+        "headOfUnit": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive", "archived"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["departmentId", "organisationId", "name", "status"]
+    },
+    "Membership": {
+      "title": "Membership",
+      "description": "Person's hierarchical membership record linking them to an organisation, optional department, and optional unit",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "personId": { "type": "string" },
+        "organisationId": { "type": "string" },
+        "organisationName": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "departmentName": { "type": "string" },
+        "unitId": { "type": "string" },
+        "unitName": { "type": "string" },
+        "roleTitle": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["personId", "organisationId", "status"]
+    },
+    "Person": {
+      "title": "Person",
+      "description": "Church directory member and potential voter",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "organisationId": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "roleTitle": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "voterCode": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive", "archived"] }
+      },
+      "required": ["fullName", "voterCode", "status"]
+    },
+    "VotingExercise": {
+      "title": "VotingExercise",
+      "description": "Configured voting exercise / election ballot with hierarchical unit and department scope support",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "description": { "type": "string" },
+        "scopeType": { "type": "string", "enum": ["church", "workforce", "organisation", "department", "unit", "custom"] },
+        "organisationId": { "type": "string" },
+        "organisationName": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "departmentName": { "type": "string" },
+        "unitId": { "type": "string" },
+        "unitName": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "scheduled", "open", "closed", "results_published", "archived"] },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "resultsPublished": { "type": "boolean" },
+        "allowSelfVote": { "type": "boolean" },
+        "voterSelectionMode": { "type": "string", "enum": ["scope_members", "manual_selection", "custom"] },
+        "nomineeSelectionMode": { "type": "string", "enum": ["scope_members", "manual_selection", "custom"] },
+        "totalVotes": { "type": "number" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "scopeType", "status"]
+    },
+    "Criterion": {
+      "title": "Criterion",
+      "description": "Voting criteria evaluated by voters",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "votingExerciseId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "order": { "type": "number" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["votingExerciseId", "title"]
+    },
+    "Nominee": {
+      "title": "Nominee",
+      "description": "Nominee appearing on official ballot",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "votingExerciseId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "roleOrTitle": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "active": { "type": "boolean" },
+        "order": { "type": "number" }
+      },
+      "required": ["votingExerciseId", "displayName"]
+    },
+    "Eligibility": {
+      "title": "Eligibility",
+      "description": "Voter eligibility status for an exercise",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "votingExerciseId": { "type": "string" },
+        "personId": { "type": "string" },
+        "eligible": { "type": "boolean" },
+        "hasVoted": { "type": "boolean" },
+        "votedAt": { "type": "string" }
+      },
+      "required": ["votingExerciseId", "personId", "eligible"]
+    },
+    "Vote": {
+      "title": "Vote",
+      "description": "Cast ballot record with anonymous voter receipt",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "votingExerciseId": { "type": "string" },
+        "nomineeId": { "type": "string" },
+        "voterId": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "receiptHash": { "type": "string" }
+      },
+      "required": ["votingExerciseId", "nomineeId", "voterId", "timestamp"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Administrative actions and audit events",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "actorId": { "type": "string" },
+        "actorName": { "type": "string" },
+        "action": { "type": "string" },
+        "resourceType": { "type": "string" },
+        "resourceId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["actorId", "action", "resourceType", "resourceId", "createdAt"]
+    },
+    "SystemConfig": {
+      "title": "SystemConfig",
+      "description": "Church branding and global configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "churchName": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "secondaryColor": { "type": "string" },
+        "accentColor": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["churchName"]
+    },
+    "LegacyWinnerRecord": {
+      "title": "LegacyWinnerRecord",
+      "description": "Historical hall of fame winner archived from previous recognition web app",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "roleOrTitle": { "type": "string" },
+        "month": { "type": "string" },
+        "year": { "type": "number" },
+        "organisationName": { "type": "string" },
+        "departmentName": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "awardCategory": { "type": "string" },
+        "awardScope": { "type": "string" },
+        "citation": { "type": "string" },
+        "totalVotes": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["displayName", "month", "year", "organisationName"]
+    }
+  },
+  "firestore": {
+    "/organisations/{orgId}": {
+      "schema": { "$ref": "#/entities/Organisation" },
+      "description": "Top-level church organisations"
+    },
+    "/departments/{deptId}": {
+      "schema": { "$ref": "#/entities/Department" },
+      "description": "Departments under organisations"
+    },
+    "/units/{unitId}": {
+      "schema": { "$ref": "#/entities/Unit" },
+      "description": "Units under departments and organisations"
+    },
+    "/memberships/{membershipId}": {
+      "schema": { "$ref": "#/entities/Membership" },
+      "description": "Person hierarchical memberships across organisations, departments, and units"
+    },
+    "/people/{personId}": {
+      "schema": { "$ref": "#/entities/Person" },
+      "description": "Church directory members and eligible voters"
+    },
+    "/votingExercises/{exerciseId}": {
+      "schema": { "$ref": "#/entities/VotingExercise" },
+      "description": "Configured voting exercises"
+    },
+    "/votingExercises/{exerciseId}/criteria/{criterionId}": {
+      "schema": { "$ref": "#/entities/Criterion" },
+      "description": "Criteria subcollection for exercise"
+    },
+    "/votingExercises/{exerciseId}/nominees/{nomineeId}": {
+      "schema": { "$ref": "#/entities/Nominee" },
+      "description": "Nominees subcollection for exercise"
+    },
+    "/votingExercises/{exerciseId}/eligibility/{eligibilityId}": {
+      "schema": { "$ref": "#/entities/Eligibility" },
+      "description": "Voter eligibility subcollection"
+    },
+    "/votingExercises/{exerciseId}/votes/{voteId}": {
+      "schema": { "$ref": "#/entities/Vote" },
+      "description": "Confidential votes cast for exercise"
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Administrative audit trail logs"
+    },
+    "/systemConfig/{configId}": {
+      "schema": { "$ref": "#/entities/SystemConfig" },
+      "description": "System branding and global configuration"
+    },
+    "/legacyHallOfFame/{winnerId}": {
+      "schema": { "$ref": "#/entities/LegacyWinnerRecord" },
+      "description": "Historical honorees and winners from previous recognition archives"
+    }
+  }
+}
