@@ -379,7 +379,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                 className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 bg-gradient-to-r from-[#FF8A00]/20 to-amber-600/10 border border-[#FF8A00]/40 text-[#FF8A00] rounded-full text-[11px] sm:text-sm font-bold shadow-md shadow-black/30 backdrop-blur-md"
               >
                 <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#FF8A00] shrink-0" />
-                <span className="tracking-wide uppercase text-[10px] sm:text-[11px] truncate">The Reinvention House • Royal Honors Sanctuary</span>
+                <span className="tracking-wide uppercase text-[10px] sm:text-[11px] truncate">TRH Ministries Global • Royal Honors</span>
               </motion.div>
 
               {/* Majestic Headline with Shimmering Gradient Typography */}
