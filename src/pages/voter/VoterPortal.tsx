@@ -754,16 +754,16 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                     <motion.div
                       key={exercise.id}
                       id={`exercise-card-${exercise.id}`}
-                      initial={{ opacity: 0, y: 36, scale: 0.97 }}
-                      whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                      viewport={{ once: true, margin: "-40px" }}
+                      initial={{ opacity: 0, y: 16 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: "120px" }}
                       transition={{
-                        duration: 0.5,
-                        delay: (index % 3) * 0.08,
-                        ease: [0.22, 1, 0.36, 1]
+                        duration: 0.35,
+                        ease: "easeOut"
                       }}
-                      whileHover={{ y: -6, transition: { duration: 0.25 } }}
-                      className="bg-[#1E293B] rounded-2xl border border-[#334155] shadow-lg hover:border-[#FF8A00]/50 transition-all flex flex-col justify-between overflow-hidden group hover:shadow-[0_15px_35px_rgba(255,138,0,0.12)]"
+                      whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                      style={{ contentVisibility: 'auto', containIntrinsicSize: '0 420px' }}
+                      className="bg-[#1E293B] rounded-2xl border border-[#334155] shadow-lg hover:border-[#FF8A00]/50 transition-[border-color,box-shadow,transform] flex flex-col justify-between overflow-hidden group hover:shadow-[0_15px_35px_rgba(255,138,0,0.12)]"
                     >
 
                       {/* Card Body */}

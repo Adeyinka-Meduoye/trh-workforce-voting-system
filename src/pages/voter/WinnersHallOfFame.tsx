@@ -304,36 +304,11 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
 
   return (
     <div className="relative min-h-screen text-[#F8FAFC] pb-16 overflow-hidden">
-      {/* Dynamic Ambient Background Motion Particles */}
+      {/* High-Performance Ambient Glows (Static, Zero GPU Re-rasterization overhead) */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <motion.div
-          animate={{
-            scale: [1, 1.25, 1],
-            opacity: [0.15, 0.28, 0.15],
-            x: [0, 40, 0],
-            y: [0, -30, 0]
-          }}
-          transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute -top-32 right-1/4 w-[600px] h-[600px] bg-[#FF8A00]/15 rounded-full blur-[140px]"
-        />
-        <motion.div
-          animate={{
-            scale: [1.2, 1, 1.2],
-            opacity: [0.2, 0.35, 0.2],
-            x: [0, -50, 0],
-            y: [0, 40, 0]
-          }}
-          transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute top-1/3 -left-48 w-[650px] h-[650px] bg-[#251464]/40 rounded-full blur-[160px]"
-        />
-        <motion.div
-          animate={{
-            opacity: [0.1, 0.22, 0.1],
-            scale: [0.9, 1.15, 0.9]
-          }}
-          transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute bottom-10 right-10 w-[500px] h-[500px] bg-[#FF8A00]/10 rounded-full blur-[130px]"
-        />
+        <div className="absolute -top-32 right-1/4 w-[500px] h-[500px] bg-gradient-to-br from-[#FF8A00]/12 to-transparent rounded-full blur-3xl" />
+        <div className="absolute top-1/3 -left-48 w-[550px] h-[550px] bg-gradient-to-tr from-[#251464]/30 to-transparent rounded-full blur-3xl" />
+        <div className="absolute bottom-10 right-10 w-[450px] h-[450px] bg-gradient-to-tl from-[#FF8A00]/10 to-transparent rounded-full blur-3xl" />
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto py-3 sm:py-6 px-3 sm:px-6 lg:px-8 space-y-6 sm:space-y-8">
@@ -643,88 +618,88 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
             </div>
           </div>
         ) : (
-          <motion.div
-            layout
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6 lg:gap-8"
-          >
-            <AnimatePresence>
-              {filteredWinners.map((record, index) => {
-                const winner = record.winner;
-                const isTie = record.isTie;
-                const isJoint = Boolean(
-                  record.isJointWinner ||
-                  record.secondaryDepartmentName ||
-                  record.jointWinnerName ||
-                  (record.allWinners && record.allWinners.length > 1)
-                );
-                const coWinner = record.allWinners && record.allWinners.length > 1 ? record.allWinners[1] : null;
-                const coWinnerName = record.jointWinnerName || coWinner?.displayName;
-                const coWinnerPhoto = record.jointWinnerPhotoUrl || coWinner?.photoUrl;
-                const hasPrimaryPhoto = Boolean(winner.photoUrl && winner.photoUrl.trim());
-                const hasCoPhoto = Boolean(coWinnerPhoto && coWinnerPhoto.trim());
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6 lg:gap-8">
+            {filteredWinners.map((record) => {
+              const winner = record.winner;
+              const isTie = record.isTie;
+              const isJoint = Boolean(
+                record.isJointWinner ||
+                record.secondaryDepartmentName ||
+                record.jointWinnerName ||
+                (record.allWinners && record.allWinners.length > 1)
+              );
+              const coWinner = record.allWinners && record.allWinners.length > 1 ? record.allWinners[1] : null;
+              const coWinnerName = record.jointWinnerName || coWinner?.displayName;
+              const coWinnerPhoto = record.jointWinnerPhotoUrl || coWinner?.photoUrl;
+              const hasPrimaryPhoto = Boolean(winner.photoUrl && winner.photoUrl.trim());
+              const hasCoPhoto = Boolean(coWinnerPhoto && coWinnerPhoto.trim());
 
-                return (
-                  <motion.div
-                    key={record.exerciseId}
-                    layout
-                    initial={{ opacity: 0, y: 44, scale: 0.96 }}
-                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                    viewport={{ once: true, margin: "-40px" }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{
-                      duration: 0.55,
-                      delay: (index % 3) * 0.09,
-                      ease: [0.22, 1, 0.36, 1]
-                    }}
-                    whileHover={{ y: -6, transition: { duration: 0.25 } }}
-                    id={`winner-card-${record.exerciseId}`}
-                    className="group relative rounded-3xl border border-slate-800/90 bg-gradient-to-b from-[#1A2234] via-[#111827] to-[#0A0E17] shadow-xl hover:shadow-[0_20px_50px_rgba(255,138,0,0.22)] hover:border-[#FF8A00]/70 transition-all duration-500 flex flex-col justify-between overflow-hidden"
-                  >
-                    {/* TOP PROMINENT WINNER PORTRAIT STAGE (THE CENTER OF ATTENTION) */}
-                    <div className="relative w-full h-64 sm:h-72 md:h-80 overflow-hidden bg-gradient-to-b from-[#251464]/60 via-slate-900 to-[#0F172A] flex items-center justify-center">
-                      {/* Dual Portraits for Joint Winners if both images exist */}
-                      {hasPrimaryPhoto && hasCoPhoto ? (
-                        <div className="relative w-full h-full grid grid-cols-2">
-                          <div className="relative w-full h-full overflow-hidden border-r border-amber-500/30">
-                            <img
-                              src={winner.photoUrl}
-                              alt={winner.displayName}
-                              className="w-full h-full object-cover object-top transition-transform duration-700 ease-out group-hover:scale-108 group-hover:brightness-105"
-                            />
-                            <div className="absolute bottom-2 left-1.5 right-1.5 px-2 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[10px] font-bold text-white truncate text-center z-10">
-                              {winner.displayName}
-                            </div>
-                          </div>
-                          <div className="relative w-full h-full overflow-hidden">
-                            <img
-                              src={coWinnerPhoto}
-                              alt={coWinnerName || 'Co-Winner'}
-                              className="w-full h-full object-cover object-top transition-transform duration-700 ease-out group-hover:scale-108 group-hover:brightness-105"
-                            />
-                            <div className="absolute bottom-2 left-1.5 right-1.5 px-2 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[10px] font-bold text-amber-300 truncate text-center z-10">
-                              {coWinnerName}
-                            </div>
-                          </div>
-                          <div className="absolute inset-0 bg-radial from-transparent via-transparent to-black/60 pointer-events-none group-hover:to-black/40 transition-colors duration-500" />
-                        </div>
-                      ) : hasPrimaryPhoto || hasCoPhoto ? (
-                        /* Single Photo Full Bleed */
-                        <div className="relative w-full h-full">
+              return (
+                <motion.div
+                  key={record.exerciseId}
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "140px" }}
+                  transition={{
+                    duration: 0.35,
+                    ease: "easeOut"
+                  }}
+                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                  id={`winner-card-${record.exerciseId}`}
+                  style={{ contentVisibility: 'auto', containIntrinsicSize: '0 540px' }}
+                  className="group relative rounded-3xl border border-slate-800/90 bg-gradient-to-b from-[#1A2234] via-[#111827] to-[#0A0E17] shadow-lg hover:shadow-[0_16px_36px_rgba(255,138,0,0.18)] hover:border-[#FF8A00]/70 transition-[border-color,box-shadow,transform] duration-300 flex flex-col justify-between overflow-hidden"
+                >
+                  {/* TOP PROMINENT WINNER PORTRAIT STAGE (THE CENTER OF ATTENTION) */}
+                  <div className="relative w-full h-64 sm:h-72 md:h-80 overflow-hidden bg-gradient-to-b from-[#251464]/60 via-slate-900 to-[#0F172A] flex items-center justify-center">
+                    {/* Dual Portraits for Joint Winners if both images exist */}
+                    {hasPrimaryPhoto && hasCoPhoto ? (
+                      <div className="relative w-full h-full grid grid-cols-2">
+                        <div className="relative w-full h-full overflow-hidden border-r border-amber-500/30">
                           <img
-                            src={winner.photoUrl || coWinnerPhoto}
+                            src={winner.photoUrl}
                             alt={winner.displayName}
-                            className="w-full h-full object-cover object-top transition-transform duration-700 ease-out group-hover:scale-108 group-hover:brightness-105"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              const parent = e.currentTarget.parentElement;
-                              if (parent) {
-                                parent.classList.add('flex', 'items-center', 'justify-center');
-                              }
-                            }}
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-105"
                           />
-                          <div className="absolute inset-0 bg-radial from-transparent via-transparent to-black/60 pointer-events-none group-hover:to-black/40 transition-colors duration-500" />
+                          <div className="absolute bottom-2 left-1.5 right-1.5 px-2 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[10px] font-bold text-white truncate text-center z-10">
+                            {winner.displayName}
+                          </div>
                         </div>
-                      ) : (
+                        <div className="relative w-full h-full overflow-hidden">
+                          <img
+                            src={coWinnerPhoto}
+                            alt={coWinnerName || 'Co-Winner'}
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-105"
+                          />
+                          <div className="absolute bottom-2 left-1.5 right-1.5 px-2 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[10px] font-bold text-amber-300 truncate text-center z-10">
+                            {coWinnerName}
+                          </div>
+                        </div>
+                        <div className="absolute inset-0 bg-radial from-transparent via-transparent to-black/60 pointer-events-none group-hover:to-black/40 transition-colors duration-500" />
+                      </div>
+                    ) : hasPrimaryPhoto || hasCoPhoto ? (
+                      /* Single Photo Full Bleed */
+                      <div className="relative w-full h-full">
+                        <img
+                          src={winner.photoUrl || coWinnerPhoto}
+                          alt={winner.displayName}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-full h-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-105"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const parent = e.currentTarget.parentElement;
+                            if (parent) {
+                              parent.classList.add('flex', 'items-center', 'justify-center');
+                            }
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-radial from-transparent via-transparent to-black/60 pointer-events-none group-hover:to-black/40 transition-colors duration-500" />
+                      </div>
+                    ) : (
                         /* Monogram Medallion Fallback */
                         <div className="relative w-full h-full flex flex-col items-center justify-center p-6 text-center overflow-hidden">
                           <div className="absolute inset-0 bg-radial from-amber-500/10 via-[#251464]/30 to-transparent pointer-events-none" />
@@ -994,8 +969,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                   </motion.div>
                 );
               })}
-            </AnimatePresence>
-          </motion.div>
+          </div>
         )}
 
         {/* COMMEMORATIVE AWARD & OSCAR STATUETTE MODAL */}
