@@ -662,7 +662,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                             decoding="async"
                             className="w-full h-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-105"
                           />
-                          <div className="absolute bottom-2 left-1.5 right-1.5 px-2 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[10px] font-bold text-white truncate text-center z-10">
+                          <div className="absolute bottom-2 left-1.5 right-1.5 px-2 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[10px] font-bold text-white text-center z-10 break-words">
                             {winner.displayName}
                           </div>
                         </div>
@@ -674,7 +674,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                             decoding="async"
                             className="w-full h-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-105"
                           />
-                          <div className="absolute bottom-2 left-1.5 right-1.5 px-2 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[10px] font-bold text-amber-300 truncate text-center z-10">
+                          <div className="absolute bottom-2 left-1.5 right-1.5 px-2 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[10px] font-bold text-amber-300 text-center z-10 break-words">
                             {coWinnerName}
                           </div>
                         </div>
@@ -734,7 +734,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                         {/* Award Category Pill */}
                         <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-slate-950/80 border border-[#FF8A00]/40 text-[#FF8A00] text-[11px] sm:text-xs font-bold backdrop-blur-md shadow-lg">
                           <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#FF8A00] shrink-0" />
-                          <span className="truncate max-w-[110px] xs:max-w-[140px] sm:max-w-[170px]">
+                          <span>
                             {record.categoryName || 'Worker of the Month'}
                           </span>
                         </span>
@@ -828,11 +828,11 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
 
                           {/* Role(s) */}
                           <div className="text-xs sm:text-sm text-[#94A3B8] font-medium mt-0.5 space-y-0.5">
-                            <div className="truncate">
+                            <div>
                               {winner.roleOrTitle || (record.departmentName ? `${record.departmentName} Contributor` : 'Honored Recipient')}
                             </div>
                             {record.jointWinnerRole && (
-                              <div className="truncate text-amber-300/90 text-xs">
+                              <div className="text-amber-300/90 text-xs">
                                 • Co-Winner: {record.jointWinnerRole}
                               </div>
                             )}
@@ -849,7 +849,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                           {record.departmentName && (
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-950/70 border border-indigo-500/30 text-indigo-300">
                               <Layers className="w-3 h-3 text-indigo-400 shrink-0" />
-                              <span className="truncate max-w-[120px] sm:max-w-[150px]">{record.departmentName}</span>
+                              <span className="font-medium">{record.departmentName}</span>
                               {record.secondaryDepartmentName && (
                                 <span className="text-[9px] text-indigo-400/80 font-bold uppercase">(Dept 1)</span>
                               )}
@@ -859,7 +859,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                           {record.secondaryDepartmentName && (
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/70 border border-amber-500/35 text-amber-300 font-medium">
                               <Layers className="w-3 h-3 text-[#FF8A00] shrink-0" />
-                              <span className="truncate max-w-[120px] sm:max-w-[150px]">{record.secondaryDepartmentName}</span>
+                              <span className="font-medium">{record.secondaryDepartmentName}</span>
                               <span className="text-[9px] text-amber-400/80 font-bold uppercase">(Dept 2)</span>
                             </span>
                           )}
@@ -889,13 +889,13 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                             <>
                               <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
                                 <div className="text-[10px] uppercase tracking-wider text-[#94A3B8] font-bold">Historical Record</div>
-                                <div className="text-xs font-bold text-[#FF8A00] font-display mt-0.5 truncate">
+                                <div className="text-xs font-bold text-[#FF8A00] font-display mt-0.5">
                                   {record.totalVotes > 0 ? `${record.totalVotes} Ballots Cast` : 'Archived Honoree'}
                                 </div>
                               </div>
                               <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
                                 <div className="text-[10px] uppercase tracking-wider text-[#94A3B8] font-bold">Honour Period</div>
-                                <div className="text-xs font-bold text-[#F8FAFC] font-display mt-0.5 truncate">
+                                <div className="text-xs font-bold text-[#F8FAFC] font-display mt-0.5">
                                   {record.month} {record.year}
                                 </div>
                               </div>
@@ -904,13 +904,13 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                             <>
                               <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
                                 <div className="text-[10px] uppercase tracking-wider text-[#94A3B8] font-bold">Winning Ballots</div>
-                                <div className="text-xs font-bold text-[#FF8A00] font-display mt-0.5 truncate">
+                                <div className="text-xs font-bold text-[#FF8A00] font-display mt-0.5">
                                   {winner.voteCount} votes ({winner.percentage}%)
                                 </div>
                               </div>
                               <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
                                 <div className="text-[10px] uppercase tracking-wider text-[#94A3B8] font-bold">Total Turnout</div>
-                                <div className="text-xs font-bold text-[#F8FAFC] font-display mt-0.5 truncate">
+                                <div className="text-xs font-bold text-[#F8FAFC] font-display mt-0.5">
                                   {record.totalVotes} ballots cast
                                 </div>
                               </div>
@@ -923,7 +923,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                       <div className="pt-3 sm:pt-4 border-t border-slate-800/80 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5">
                         <span className="text-[11px] text-[#94A3B8] flex items-center gap-1.5 font-medium">
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span className="truncate">Certified &amp; Verified</span>
+                          <span>Certified &amp; Verified</span>
                         </span>
 
                         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
