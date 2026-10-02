@@ -173,8 +173,14 @@ export const PublicResultsPage: React.FC<PublicResultsPageProps> = ({
             <div className="text-xl font-bold text-[#FF8A00] font-display mt-0.5">{participationRate}%</div>
           </div>
           <div className="p-3 bg-[#0F172A] rounded-xl border border-[#334155]">
-            <div className="text-xs text-[#94A3B8] font-medium">Nominees Evaluated</div>
-            <div className="text-xl font-bold text-[#F8FAFC] font-display mt-0.5">{nomineeResults.length}</div>
+            <div className="text-xs text-[#94A3B8] font-medium">
+              {exercise.votingMode === 'rating_scale' ? 'Top Score (Over 100%)' : 'Nominees Evaluated'}
+            </div>
+            <div className="text-xl font-bold text-amber-300 font-display mt-0.5 font-mono">
+              {exercise.votingMode === 'rating_scale'
+                ? `${winners[0]?.scoreOver100 ?? winners[0]?.percentage ?? 0}%`
+                : nomineeResults.length}
+            </div>
           </div>
         </div>
       </div>
@@ -195,7 +201,9 @@ export const PublicResultsPage: React.FC<PublicResultsPageProps> = ({
                 Official Result: Joint Winners (Tie)
               </h2>
               <p className="text-xs text-[#94A3B8]">
-                Multiple nominees received the exact same top vote count ({winners[0]?.voteCount} votes each).
+                {exercise.votingMode === 'rating_scale'
+                  ? `Multiple nominees received the exact same top score (${winners[0]?.totalScore ?? winners[0]?.voteCount} points each).`
+                  : `Multiple nominees received the exact same top vote count (${winners[0]?.voteCount} votes each).`}
               </p>
             </div>
           </div>
@@ -218,7 +226,9 @@ export const PublicResultsPage: React.FC<PublicResultsPageProps> = ({
                 <div>
                   <h4 className="text-sm font-bold text-[#F8FAFC]">{w.displayName}</h4>
                   <div className="text-xs text-[#FF8A00] font-semibold mt-0.5">
-                    {w.voteCount} votes ({w.percentage}%)
+                    {exercise.votingMode === 'rating_scale'
+                      ? `${w.totalScore ?? w.voteCount} pts (Avg: ${w.averageScore ?? 0} / ${exercise.maxScore || 10})`
+                      : `${w.voteCount} votes (${w.percentage}%)`}
                   </div>
                 </div>
               </div>
@@ -250,7 +260,8 @@ export const PublicResultsPage: React.FC<PublicResultsPageProps> = ({
 
             <div className="flex-1 text-center md:text-left space-y-2">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#FF8A00]/20 border border-[#FF8A00]/40 text-[#FF8A00] rounded-full text-xs font-bold">
-                <Trophy className="w-3.5 h-3.5" /> First Place Recipient
+                <Trophy className="w-3.5 h-3.5" />
+                {exercise.votingMode === 'rating_scale' ? 'Top Rated Candidate' : 'First Place Recipient'}
               </div>
               <h2 className="text-2xl sm:text-3xl font-bold font-display text-[#F8FAFC]">
                 {winners[0].displayName}
@@ -261,7 +272,20 @@ export const PublicResultsPage: React.FC<PublicResultsPageProps> = ({
                 </p>
               )}
               <p className="text-xs text-[#94A3B8] pt-1">
-                Received a total of <strong className="text-[#FF8A00] font-bold">{winners[0].voteCount} votes</strong> ({winners[0].percentage}% of all cast ballots).
+                {exercise.votingMode === 'rating_scale' ? (
+                  <>
+                    Achieved top standing with an overall score of{' '}
+                    <strong className="text-amber-300 font-bold font-mono text-sm">
+                      {winners[0].scoreOver100 ?? winners[0].percentage}% / 100% (Over 100%)
+                    </strong>{' '}
+                    • <span className="text-slate-300 font-semibold">{winners[0].totalScore ?? winners[0].voteCount} Total Points</span>{' '}
+                    (average rating of <strong className="text-white font-mono">{winners[0].averageScore ?? 0} / {exercise.maxScore || 10} pts</strong> from {winners[0].ratingCount ?? winners[0].ratingsCount ?? totalVotes} evaluations).
+                  </>
+                ) : (
+                  <>
+                    Received a total of <strong className="text-[#FF8A00] font-bold">{winners[0].voteCount} votes</strong> ({winners[0].percentage}% of all cast ballots).
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -274,7 +298,9 @@ export const PublicResultsPage: React.FC<PublicResultsPageProps> = ({
           <div className="flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-[#FF8A00]" />
             <h2 className="text-base font-bold text-[#F8FAFC] font-display">
-              Comprehensive Nominee Standings
+              {exercise.votingMode === 'rating_scale'
+                ? 'Workforce Nominee Rating Standings'
+                : 'Comprehensive Nominee Standings'}
             </h2>
           </div>
           <span className="text-xs text-[#94A3B8] font-mono">
@@ -339,12 +365,25 @@ export const PublicResultsPage: React.FC<PublicResultsPageProps> = ({
                   </div>
 
                   <div className="text-right shrink-0">
-                    <div className="text-sm font-bold text-[#F8FAFC] font-display">
-                      {nominee.voteCount} <span className="text-xs font-normal text-[#94A3B8]">votes</span>
-                    </div>
-                    <div className="text-xs font-semibold text-[#FF8A00]">
-                      {nominee.percentage}%
-                    </div>
+                    {exercise.votingMode === 'rating_scale' ? (
+                      <div>
+                        <div className="text-sm font-bold text-amber-300 font-display font-mono">
+                          {nominee.scoreOver100 ?? nominee.percentage}% <span className="text-xs font-normal text-slate-400">/ 100%</span>
+                        </div>
+                        <div className="text-xs font-semibold text-white/90">
+                          {nominee.totalScore ?? nominee.voteCount} pts • Avg: {nominee.averageScore ?? 0} / {exercise.maxScore || 10}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="text-sm font-bold text-[#F8FAFC] font-display">
+                          {nominee.voteCount} <span className="text-xs font-normal text-[#94A3B8]">votes</span>
+                        </div>
+                        <div className="text-xs font-semibold text-[#FF8A00]">
+                          {nominee.percentage}%
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

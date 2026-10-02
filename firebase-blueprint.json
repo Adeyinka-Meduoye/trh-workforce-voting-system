@@ -116,6 +116,9 @@
         "endTime": { "type": "string" },
         "resultsPublished": { "type": "boolean" },
         "allowSelfVote": { "type": "boolean" },
+        "votingMode": { "type": "string", "enum": ["single_choice", "rating_scale"] },
+        "minScore": { "type": "number" },
+        "maxScore": { "type": "number" },
         "voterSelectionMode": { "type": "string", "enum": ["scope_members", "manual_selection", "custom"] },
         "nomineeSelectionMode": { "type": "string", "enum": ["scope_members", "manual_selection", "custom"] },
         "totalVotes": { "type": "number" },
@@ -149,6 +152,8 @@
         "displayName": { "type": "string" },
         "roleOrTitle": { "type": "string" },
         "photoUrl": { "type": "string" },
+        "excludedVoterIds": { "type": "array", "items": { "type": "string" } },
+        "exclusionReason": { "type": "string" },
         "active": { "type": "boolean" },
         "order": { "type": "number" }
       },
@@ -177,10 +182,12 @@
         "votingExerciseId": { "type": "string" },
         "nomineeId": { "type": "string" },
         "voterId": { "type": "string" },
+        "scores": { "type": "object" },
+        "totalScore": { "type": "number" },
         "timestamp": { "type": "string" },
         "receiptHash": { "type": "string" }
       },
-      "required": ["votingExerciseId", "nomineeId", "voterId", "timestamp"]
+      "required": ["votingExerciseId", "voterId", "timestamp"]
     },
     "AuditLog": {
       "title": "AuditLog",

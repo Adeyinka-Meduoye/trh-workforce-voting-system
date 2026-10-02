@@ -1,4 +1,4 @@
-import { WinnerRecord } from '../types';
+import { WinnerRecord, VotingScopeType } from '../types';
 import { TRH_OFFICIAL_LOGO_BASE64 } from './trhLogoData';
 import { toPng } from 'html-to-image';
 
@@ -312,7 +312,7 @@ export const OSCAR_STATUETTE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" view
  * Resolves the underlying voting exercise or recognition scope:
  * 'church' | 'workforce' | 'organisation' | 'department' | 'unit'
  */
-export function resolveWinnerScope(record: WinnerRecord): 'church' | 'workforce' | 'organisation' | 'department' | 'unit' {
+export function resolveWinnerScope(record: WinnerRecord): VotingScopeType {
   // 1. Explicit scopeType on record
   const st = (record.scopeType || '').toLowerCase().trim();
   if (st === 'church') return 'church';
@@ -320,10 +320,12 @@ export function resolveWinnerScope(record: WinnerRecord): 'church' | 'workforce'
   if (st === 'organisation' || st === 'organization') return 'organisation';
   if (st === 'unit') return 'unit';
   if (st === 'department') return 'department';
+  if (st === 'custom') return 'custom';
 
   // 2. awardScope text
   const as = (record.awardScope || '').toLowerCase();
   if (as.includes('church')) return 'church';
+  if (as.includes('custom')) return 'custom';
   if (as.includes('workforce') || as.includes('all department')) return 'workforce';
   if (as.includes('organis') || as.includes('organiz')) return 'organisation';
   if (as.includes('unit')) return 'unit';
@@ -332,6 +334,7 @@ export function resolveWinnerScope(record: WinnerRecord): 'church' | 'workforce'
   // 3. awardCategory
   const ac = (record.awardCategory || '').toLowerCase();
   if (ac === 'innovative' || ac.includes('church')) return 'church';
+  if (ac === 'custom') return 'custom';
   if (ac === 'workforce_wide' || ac.includes('workforce')) return 'workforce';
   if (ac.includes('organis') || ac.includes('organiz')) return 'organisation';
   if (ac === 'unit') return 'unit';
@@ -340,6 +343,7 @@ export function resolveWinnerScope(record: WinnerRecord): 'church' | 'workforce'
   // 4. Exercise title / category name heuristics
   const title = `${record.exerciseTitle || ''} ${record.categoryName || ''} ${record.awardTitle || ''}`.toLowerCase();
   if (title.includes('church-wide') || title.includes('church wide') || title.includes('entire church')) return 'church';
+  if (title.includes('custom group') || title.includes('special committee')) return 'custom';
   if (title.includes('workforce-wide') || title.includes('workforce wide') || title.includes('entire workforce') || title.includes('all departments')) return 'workforce';
   if (title.includes('organisation-wide') || title.includes('organization-wide') || title.includes('organisation wide')) return 'organisation';
   if (title.includes('unit-wide') || title.includes('unit wide') || title.includes('unit voting')) return 'unit';
@@ -381,6 +385,8 @@ export function getCertificateHallOfFameTitle(record: WinnerRecord): string {
       return 'Department Hall of Fame';
     case 'unit':
       return 'Unit Hall of Fame';
+    case 'custom':
+      return 'Custom Group Hall of Fame';
     default:
       return 'Workforce Hall of Fame';
   }
@@ -418,6 +424,8 @@ export function getAwardHallOfFameTitle(record: WinnerRecord): string {
       const unitName = record.unitName?.trim() || '';
       return unitName ? `Unit Hall of Fame (${unitName})` : 'Unit Hall of Fame';
     }
+    case 'custom':
+      return 'Custom Group Hall of Fame';
     default:
       return 'Workforce Hall of Fame';
   }

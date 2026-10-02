@@ -33,6 +33,7 @@ import {
   FolderTree,
   KeyRound,
   User,
+  ShieldAlert,
   ShieldCheck,
   CheckSquare,
   Square,
@@ -58,8 +59,11 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
   const [nominees, setNominees] = useState<Nominee[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Selected Nominee
+  // Selected Nominee (for single_choice mode)
   const [selectedNomineeId, setSelectedNomineeId] = useState<string>('');
+
+  // Rating Scale Scores (for rating_scale mode: nomineeId -> score 5 to 10)
+  const [nomineeScores, setNomineeScores] = useState<Record<string, number>>({});
 
   // Category selections & filter tracking for multi-category and single-category exercises
   const [categorySelections, setCategorySelections] = useState<Record<string, string>>({});
@@ -175,6 +179,12 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
   const handleConfirmVote = async () => {
     if (!exercise || !selectedNomineeId || !voterSession) return;
 
+    const chosenNominee = nominees.find((n) => n.id === selectedNomineeId);
+    if (chosenNominee?.excludedVoterIds?.includes(voterSession.id)) {
+      toastError('Voting Restricted', `Under governance recusal rules, you are restricted from voting for "${chosenNominee.displayName}".`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const res = await submitVote(exercise.id, selectedNomineeId, {
@@ -261,6 +271,10 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
         toastError('Self-Voting Disabled', 'Self-voting is not permitted in this exercise.');
         return;
       }
+      if (targetNominee.excludedVoterIds && targetNominee.excludedVoterIds.includes(voterSession.id)) {
+        toastError('Voting Restricted', `Under governance recusal rules, you are restricted from voting for "${targetNominee.displayName}".`);
+        return;
+      }
 
       setIsSubmitting(true);
       try {
@@ -338,6 +352,10 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
         toastError('Self-Voting Disabled', 'Self-voting is not permitted in this exercise.');
         return;
       }
+      if (targetNominee.excludedVoterIds && targetNominee.excludedVoterIds.includes(authRes.person.id)) {
+        toastError('Voting Restricted', `Under governance recusal rules, you are restricted from voting for "${targetNominee.displayName}".`);
+        return;
+      }
 
       // Proceed to instant submit
       setIsSubmitting(true);
@@ -399,14 +417,14 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
   };
 
   // Derived categories in this exercise
-  const categoriesList = useMemo(() => {
+  const categoriesList = useMemo<string[]>(() => {
     if (!exercise) return [];
 
     // 1. If exercise explicitly has categories defined
     if (Array.isArray((exercise as any).categories) && (exercise as any).categories.length > 0) {
       return (exercise as any).categories
-        .map((c: any) => typeof c === 'string' ? c.trim() : c.name || c.title)
-        .filter(Boolean);
+        .map((c: any) => (typeof c === 'string' ? c.trim() : c.name || c.title))
+        .filter(Boolean) as string[];
     }
 
     // 2. Distinct categories/departments across nominees
@@ -455,7 +473,7 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
     if (categoriesList.length <= 1) {
       return selectedNomineeId ? 1 : 0;
     }
-    return categoriesList.filter((c) => !!categorySelections[c]).length;
+    return categoriesList.filter((c: string) => !!categorySelections[c]).length;
   }, [categoriesList, categorySelections, selectedNomineeId, eligibilityStatus?.hasVoted]);
 
   const totalCategories = Math.max(categoriesList.length, 1);
@@ -476,12 +494,145 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
     const selfVoteForbidden = isSelf && !exercise?.allowSelfVote;
     if (selfVoteForbidden || eligibilityStatus?.hasVoted || exercise?.status !== 'open') return;
 
+    if (voterSession && nominee.excludedVoterIds && nominee.excludedVoterIds.includes(voterSession.id)) {
+      toastError('Voting Restricted', `Under governance recusal rules, you are restricted from voting for "${nominee.displayName}".`);
+      return;
+    }
+
     const cat = getNomineeCategory(nominee);
     setSelectedNomineeId(nominee.id);
     setCategorySelections((prev) => ({
       ...prev,
       [cat]: nominee.id
     }));
+  };
+
+  // --- RATING SCALE LOGIC (e.g. 5 to 10 points per nominee, self-vote barred) ---
+  const isRatingScale = exercise?.votingMode === 'rating_scale';
+  const minScore = exercise?.minScore ?? 5;
+  const maxScore = exercise?.maxScore ?? 10;
+
+  // Detect if current authenticated voter is one of the nominees
+  const currentVoterNominee = useMemo(() => {
+    if (!voterSession) return null;
+    return nominees.find(
+      (n) => n.personId === voterSession.id ||
+        (n.displayName && voterSession.fullName && n.displayName.trim().toLowerCase() === voterSession.fullName.trim().toLowerCase())
+    );
+  }, [voterSession, nominees]);
+
+  // Check nominees for which this voter is explicitly restricted / recused
+  const restrictedNomineesForVoter = useMemo(() => {
+    if (!voterSession) return [];
+    return nominees.filter((n) => n.excludedVoterIds && n.excludedVoterIds.includes(voterSession.id));
+  }, [voterSession, nominees]);
+
+  // Evaluatable nominees (excludes the voter's own nomination AND any nominees for which this voter is restricted/recused)
+  const evaluatableNominees = useMemo(() => {
+    return nominees.filter((n) => {
+      // 1. Self-nomination restriction
+      if (currentVoterNominee && n.id === currentVoterNominee.id) return false;
+      // 2. Specific voter exclusion / recusal rule
+      if (voterSession && n.excludedVoterIds && n.excludedVoterIds.includes(voterSession.id)) {
+        return false;
+      }
+      return true;
+    });
+  }, [nominees, currentVoterNominee, voterSession]);
+
+  // How many eligible candidates have received valid scores
+  const scoredCandidatesCount = useMemo(() => {
+    return evaluatableNominees.filter((n) => {
+      const sc = nomineeScores[n.id];
+      return typeof sc === 'number' && sc >= minScore && sc <= maxScore;
+    }).length;
+  }, [evaluatableNominees, nomineeScores, minScore, maxScore]);
+
+  const isAllScoresCompleted = evaluatableNominees.length > 0 && scoredCandidatesCount === evaluatableNominees.length;
+
+  const averageScoreGiven = useMemo(() => {
+    const scoresArr = Object.values(nomineeScores).filter((s) => typeof s === 'number' && s >= minScore && s <= maxScore);
+    if (scoresArr.length === 0) return 0;
+    const sum = scoresArr.reduce((a, b) => a + b, 0);
+    return Number((sum / scoresArr.length).toFixed(1));
+  }, [nomineeScores, minScore, maxScore]);
+
+  // Handler to set score for a nominee
+  const handleSetNomineeScore = (nomineeId: string, score: number) => {
+    if (eligibilityStatus?.hasVoted || exercise?.status !== 'open') return;
+    if (currentVoterNominee && nomineeId === currentVoterNominee.id) return;
+    if (voterSession) {
+      const targetNom = nominees.find((n) => n.id === nomineeId);
+      if (targetNom?.excludedVoterIds?.includes(voterSession.id)) {
+        toastError('Voting Restricted', `You are restricted from evaluating "${targetNom.displayName}".`);
+        return;
+      }
+    }
+    setNomineeScores((prev) => ({
+      ...prev,
+      [nomineeId]: score
+    }));
+  };
+
+  // Handler for score ballot submission
+  const handleConfirmScoreBallot = async () => {
+    if (!exercise || !voterSession) return;
+
+    const unScored = evaluatableNominees.filter((n) => {
+      const sc = nomineeScores[n.id];
+      return typeof sc !== 'number' || sc < minScore || sc > maxScore;
+    });
+
+    if (unScored.length > 0) {
+      toastError(
+        'Incomplete Rating Ballot',
+        `Please assign a score (between ${minScore} and ${maxScore}) to all ${evaluatableNominees.length} eligible candidates.`
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await submitVote(
+        exercise.id,
+        nomineeScores,
+        {
+          personId: voterSession.id,
+          voterName: voterSession.fullName,
+          voterCode: voterSession.voterCode,
+          voterEmail: voterSession.email
+        },
+        { scores: nomineeScores }
+      );
+
+      setSubmissionResult(res);
+      setShowConfirmModal(false);
+
+      if (res.success) {
+        confetti({
+          particleCount: 120,
+          spread: 80,
+          origin: { y: 0.6 }
+        });
+        setEligibilityStatus({ eligible: true, hasVoted: true });
+        toastSuccess(
+          'Evaluation Ballot Recorded!',
+          `Your rating evaluation for ${evaluatableNominees.length} candidates in "${exercise.title}" has been securely recorded. (Receipt: ${res.receiptHash || voterSession.voterCode})`,
+          8000
+        );
+      } else {
+        toastError('Submission Failed', res.message || 'We were unable to record your evaluation ballot.');
+      }
+    } catch (err: any) {
+      toastError('Submission Error', err.message || 'A network error occurred while submitting your scores.');
+      setSubmissionResult({
+        success: false,
+        code: 'ERROR',
+        message: err.message || 'Submission failed.'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -721,7 +872,7 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
         {/* Category Status Chips */}
         <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold text-[#94A3B8] mr-1">Categories:</span>
-          {categoriesList.map((cat, idx) => {
+          {categoriesList.map((cat: string, idx: number) => {
             const isCompleted = isCategoryCompleted(cat);
             const isFiltered = activeCategoryFilter === cat;
             const selectedInCatId = categoriesList.length > 1 ? categorySelections[cat] : selectedNomineeId;
@@ -793,7 +944,7 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-            {criteria.map((crit, idx) => (
+            {criteria.map((crit: Criterion, idx: number) => (
               <div
                 key={crit.id}
                 className="p-3.5 bg-[#0F172A] border border-[#334155] rounded-xl flex items-start gap-3"
@@ -819,6 +970,11 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-[#F8FAFC] font-display flex items-center gap-2">
               Official Nominees
+              {isRatingScale && (
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  Rating Scale ({minScore}–{maxScore} pts)
+                </span>
+              )}
               {categoriesList.length > 1 && (
                 <span className="text-xs font-normal text-[#94A3B8]">
                   ({activeCategoryFilter === 'all' ? 'All Categories' : activeCategoryFilter})
@@ -826,7 +982,9 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
               )}
             </h2>
             <p className="text-xs sm:text-sm text-[#94A3B8] mt-0.5">
-              Enter your voting code, select your preferred nominee, and cast your ballot in an instant.
+              {isRatingScale
+                ? `Evaluate each candidate with ${minScore} (lowest) to ${maxScore} (highest). Nominees cannot rate themselves.`
+                : 'Enter your voting code, select your preferred nominee, and cast your ballot in an instant.'}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -918,7 +1076,9 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                   </form>
 
                   <p className="text-[11px] text-[#94A3B8] leading-relaxed">
-                    Enter your code, select a nominee, and click <strong className="text-[#FF8A00]">Cast Vote in an Instant</strong> below.
+                    {isRatingScale
+                      ? `Enter your code, evaluate the candidates with a score between ${minScore} and ${maxScore}, and submit your ballot.`
+                      : 'Enter your code, select a nominee, and click Cast Vote in an Instant below.'}
                   </p>
                 </div>
               )}
@@ -930,80 +1090,157 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                 </div>
               )}
 
-              {/* INSTANT CAST VOTE ACTION PANEL */}
-              {!eligibilityStatus?.hasVoted && isOpen && (
-                <div className="pt-3 border-t border-slate-700/80 space-y-3">
-                  <div className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5">
-                    <Vote className="w-3.5 h-3.5 text-[#FF8A00]" />
-                    <span>Instant Ballot Submission</span>
-                  </div>
+              {/* RATING SCALE BALLOT SUBMISSION PANEL */}
+              {isRatingScale ? (
+                !eligibilityStatus?.hasVoted && isOpen && (
+                  <div className="pt-3 border-t border-slate-700/80 space-y-3">
+                    <div className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Workforce Evaluation Ballot</span>
+                    </div>
 
-                  {selectedNominee ? (
-                    <div className="p-3.5 bg-[#0F172A] rounded-xl border border-[#FF8A00]/40 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-[#251464] border border-[#FF8A00]/40 overflow-hidden shrink-0">
-                          {selectedNominee.photoUrl ? (
-                            <img
-                              src={selectedNominee.photoUrl}
-                              alt={selectedNominee.displayName}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center font-bold text-[#FF8A00] text-base">
-                              {selectedNominee.displayName.charAt(0)}
-                            </div>
-                          )}
+                    <div className="p-3.5 bg-[#0F172A] rounded-xl border border-amber-500/40 space-y-3">
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-slate-400">Evaluation Progress:</span>
+                          <span className="font-bold text-white">
+                            {scoredCandidatesCount} of {evaluatableNominees.length} Scored
+                          </span>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[11px] text-[#FF8A00] font-semibold">Selected Nominee:</div>
-                          <div className="text-sm font-bold text-[#F8FAFC] break-words whitespace-normal leading-snug">
-                            {selectedNominee.displayName}
-                          </div>
-                          <div className="text-[10px] text-[#94A3B8] mt-0.5">
-                            {getNomineeCategory(selectedNominee)}
-                          </div>
+                        <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                          <div
+                            className="bg-gradient-to-r from-[#FF8A00] to-amber-400 h-full transition-all duration-300"
+                            style={{
+                              width: `${Math.round((scoredCandidatesCount / Math.max(evaluatableNominees.length, 1)) * 100)}%`
+                            }}
+                          />
                         </div>
                       </div>
+
+                      {scoredCandidatesCount > 0 && (
+                        <div className="flex justify-between items-center text-xs text-slate-300 pt-1 border-t border-slate-800">
+                          <span className="text-slate-400">Average Rating Given:</span>
+                          <span className="font-bold text-amber-300 font-mono">
+                            {averageScoreGiven} / {maxScore} pts
+                          </span>
+                        </div>
+                      )}
+
+                      {currentVoterNominee && (
+                        <div className="text-[11px] text-amber-300 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20 leading-relaxed">
+                          ✓ <strong>Self-Vote Excluded:</strong> As a candidate in this cycle, your own rating is barred per integrity rules. You evaluate your fellow nominees.
+                        </div>
+                      )}
+
+                      {restrictedNomineesForVoter.length > 0 && (
+                        <div className="text-[11px] text-rose-300 bg-rose-500/10 p-2.5 rounded-lg border border-rose-500/20 leading-relaxed flex items-center gap-2">
+                          <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                          <span><strong>Recusal Notice:</strong> You are restricted from voting for {restrictedNomineesForVoter.length} candidate(s) under governance policy. Only the remaining {evaluatableNominees.length} eligible candidates are required on your ballot.</span>
+                        </div>
+                      )}
 
                       <button
                         type="button"
-                        id="btn-instant-vote-side"
-                        disabled={isSubmitting || verifyingCode}
-                        onClick={() => handleInstantVote(selectedNominee)}
-                        className="w-full py-3 px-4 bg-gradient-to-r from-[#FF8A00] to-[#E85B00] hover:from-[#E85B00] hover:to-[#FF8A00] text-white font-black text-sm rounded-xl transition-all shadow-lg hover:shadow-[#FF8A00]/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        id="btn-submit-score-ballot"
+                        disabled={isSubmitting || verifyingCode || !isAllScoresCompleted}
+                        onClick={() => {
+                          if (!voterSession) {
+                            setCodeError('Please enter and verify your voting code first.');
+                            return;
+                          }
+                          setHasReviewedSelection(false);
+                          setShowConfirmModal(true);
+                        }}
+                        className="w-full py-3 px-4 bg-gradient-to-r from-[#FF8A00] to-amber-500 hover:from-[#E85B00] hover:to-amber-600 text-slate-950 font-black text-sm rounded-xl transition-all shadow-lg hover:shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        <Zap className="w-4 h-4 fill-current text-white" />
+                        <Sparkles className="w-4 h-4 fill-slate-950" />
                         <span>
                           {isSubmitting
-                            ? 'Casting Vote...'
-                            : voterSession
-                            ? 'Cast Vote in an Instant'
-                            : 'Enter Code & Cast Vote'}
+                            ? 'Submitting Ballot...'
+                            : !isAllScoresCompleted
+                            ? `Score All Candidates (${scoredCandidatesCount}/${evaluatableNominees.length})`
+                            : 'Review & Submit Ballot'}
                         </span>
                       </button>
+                    </div>
+                  </div>
+                )
+              ) : (
+                /* INSTANT CAST VOTE ACTION PANEL FOR SINGLE CHOICE */
+                !eligibilityStatus?.hasVoted && isOpen && (
+                  <div className="pt-3 border-t border-slate-700/80 space-y-3">
+                    <div className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5">
+                      <Vote className="w-3.5 h-3.5 text-[#FF8A00]" />
+                      <span>Instant Ballot Submission</span>
+                    </div>
 
-                      <div className="text-center">
+                    {selectedNominee ? (
+                      <div className="p-3.5 bg-[#0F172A] rounded-xl border border-[#FF8A00]/40 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl bg-[#251464] border border-[#FF8A00]/40 overflow-hidden shrink-0">
+                            {selectedNominee.photoUrl ? (
+                              <img
+                                src={selectedNominee.photoUrl}
+                                alt={selectedNominee.displayName}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center font-bold text-[#FF8A00] text-base">
+                                {selectedNominee.displayName.charAt(0)}
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[11px] text-[#FF8A00] font-semibold">Selected Nominee:</div>
+                            <div className="text-sm font-bold text-[#F8FAFC] break-words whitespace-normal leading-snug">
+                              {selectedNominee.displayName}
+                            </div>
+                            <div className="text-[10px] text-[#94A3B8] mt-0.5">
+                              {getNomineeCategory(selectedNominee)}
+                            </div>
+                          </div>
+                        </div>
+
                         <button
                           type="button"
-                          onClick={() => {
-                            setHasReviewedSelection(false);
-                            setShowConfirmModal(true);
-                          }}
-                          className="text-[11px] text-[#94A3B8] hover:text-[#F8FAFC] underline cursor-pointer"
+                          id="btn-instant-vote-side"
+                          disabled={isSubmitting || verifyingCode}
+                          onClick={() => handleInstantVote(selectedNominee)}
+                          className="w-full py-3 px-4 bg-gradient-to-r from-[#FF8A00] to-[#E85B00] hover:from-[#E85B00] hover:to-[#FF8A00] text-white font-black text-sm rounded-xl transition-all shadow-lg hover:shadow-[#FF8A00]/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                         >
-                          Review details before voting
+                          <Zap className="w-4 h-4 fill-current text-white" />
+                          <span>
+                            {isSubmitting
+                              ? 'Casting Vote...'
+                              : voterSession
+                              ? 'Cast Vote in an Instant'
+                              : 'Enter Code & Cast Vote'}
+                          </span>
                         </button>
+
+                        <div className="text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHasReviewedSelection(false);
+                              setShowConfirmModal(true);
+                            }}
+                            className="text-[11px] text-[#94A3B8] hover:text-[#F8FAFC] underline cursor-pointer"
+                          >
+                            Review details before voting
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="p-3.5 bg-[#0F172A] rounded-xl border border-dashed border-[#334155] text-center space-y-1">
-                      <p className="text-xs font-medium text-[#F8FAFC]">No nominee selected yet</p>
-                      <p className="text-[11px] text-[#94A3B8]">
-                        Tap any candidate card on the ballot to select them and cast your vote in an instant.
-                      </p>
-                    </div>
-                  )}
-                </div>
+                    ) : (
+                      <div className="p-3.5 bg-[#0F172A] rounded-xl border border-dashed border-[#334155] text-center space-y-1">
+                        <p className="text-xs font-medium text-[#F8FAFC]">No nominee selected yet</p>
+                        <p className="text-[11px] text-[#94A3B8]">
+                          Tap any candidate card on the ballot to select them and cast your vote in an instant.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )
               )}
             </div>
           </div>
@@ -1025,7 +1262,7 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                 >
                   All Categories ({nominees.length})
                 </button>
-                {categoriesList.map((cat) => {
+                {categoriesList.map((cat: string) => {
                   const isCatDone = isCategoryCompleted(cat);
                   const isAct = activeCategoryFilter === cat;
                   const countInCat = nominees.filter((n) => getNomineeCategory(n) === cat).length;
@@ -1065,9 +1302,166 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                   const isSelected = categoriesList.length > 1
                     ? categorySelections[nomineeCat] === nominee.id
                     : selectedNomineeId === nominee.id;
-                  const isSelf = voterSession && nominee.personId === voterSession.id;
-                  const selfVoteForbidden = isSelf && !exercise.allowSelfVote;
+                  const isSelf = voterSession && (
+                    nominee.personId === voterSession.id ||
+                    (nominee.displayName && voterSession.fullName && nominee.displayName.trim().toLowerCase() === voterSession.fullName.trim().toLowerCase())
+                  );
+                  const isVoterRestrictedForNominee = Boolean(
+                    voterSession && nominee.excludedVoterIds && nominee.excludedVoterIds.includes(voterSession.id)
+                  );
+                  const selfVoteForbidden = (isSelf && (!exercise.allowSelfVote || isRatingScale)) || isVoterRestrictedForNominee;
 
+                  if (isRatingScale) {
+                    // --- RATING SCALE CARD RENDERING (Scale 5 to 10 points) ---
+                    const currentScore = nomineeScores[nominee.id];
+                    const isVoterHimself = isSelf;
+
+                    return (
+                      <div
+                        key={nominee.id}
+                        id={`nominee-card-${nominee.id}`}
+                        className={`relative p-4 sm:p-5 rounded-2xl border transition-all bg-[#1E293B] flex flex-col justify-between ${
+                          currentScore
+                            ? 'border-amber-500/80 ring-2 ring-amber-500/20 shadow-md bg-gradient-to-b from-amber-500/5 to-[#1E293B]'
+                            : 'border-[#334155] hover:border-amber-500/40'
+                        } ${isVoterHimself || isVoterRestrictedForNominee ? 'border-amber-500/30 bg-[#1E293B]/70' : ''}`}
+                      >
+                        <div className="flex items-start gap-3 sm:gap-4">
+                          {/* Nominee Photo or Avatar */}
+                          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#334155] border border-[#475569] overflow-hidden shrink-0">
+                            {nominee.photoUrl ? (
+                              <img
+                                src={nominee.photoUrl}
+                                alt={nominee.displayName}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center font-display font-bold text-[#FF8A00] text-xl bg-[#251464]">
+                                {nominee.displayName.charAt(0)}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="text-sm sm:text-base font-bold text-[#F8FAFC] break-words whitespace-normal leading-snug">
+                                {nominee.displayName}
+                              </h3>
+
+                              {isVoterHimself ? (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold shrink-0">
+                                  You
+                                </span>
+                              ) : isVoterRestrictedForNominee ? (
+                                <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold shrink-0 flex items-center gap-1">
+                                  <ShieldAlert className="w-3 h-3 text-rose-400" />
+                                  Restricted
+                                </span>
+                              ) : currentScore ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 text-xs font-mono shrink-0">
+                                  <Sparkles className="w-3 h-3 text-amber-400" />
+                                  {currentScore} / {maxScore} pts
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {/* Category and Department Badges */}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-[#251464] text-[#FF8A00] border border-[#FF8A00]/30 text-[10px] font-bold">
+                                {nomineeCat}
+                              </span>
+                              {(nominee.roleOrTitle || nominee.department) && (
+                                <span className="text-xs text-[#94A3B8] break-words whitespace-normal">
+                                  {[nominee.roleOrTitle, nominee.department].filter(Boolean).join(' • ')}
+                                </span>
+                              )}
+                            </div>
+
+                            {nominee.bio && (
+                              <p className="text-xs text-[#94A3B8] mt-2 line-clamp-2 leading-relaxed">
+                                {nominee.bio}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Interactive Score Selector Buttons (5 to 10) OR Block Banners */}
+                        {isVoterHimself ? (
+                          <div className="mt-3 p-3 bg-amber-950/40 rounded-xl border border-amber-500/30 text-amber-300 text-xs space-y-1">
+                            <div className="flex items-center gap-1.5 font-bold">
+                              <Shield className="w-4 h-4 text-amber-400 shrink-0" />
+                              <span>Self-Nomination (Voting Excluded)</span>
+                            </div>
+                            <p className="text-[11px] text-slate-300 leading-relaxed">
+                              Under workforce voting rules, members nominated in this cycle cannot vote for themselves. Your score is automatically excluded from your ballot, but you can evaluate all other candidates below.
+                            </p>
+                          </div>
+                        ) : isVoterRestrictedForNominee ? (
+                          <div className="mt-3 p-3 bg-rose-950/40 rounded-xl border border-rose-500/30 text-rose-300 text-xs space-y-1">
+                            <div className="flex items-center gap-1.5 font-bold">
+                              <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                              <span>Governance Recusal / Restricted Vote</span>
+                            </div>
+                            <p className="text-[11px] text-slate-300 leading-relaxed">
+                              {nominee.exclusionReason || 'Under church governance and recusal policy, you are restricted from evaluating this particular candidate. You are free to evaluate the other candidates on this ballot.'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="mt-3 pt-3 border-t border-slate-700/80 space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                Rate Candidate ({minScore} lowest – {maxScore} highest):
+                              </span>
+                              {currentScore ? (
+                                <span className="text-amber-300 font-bold text-xs">
+                                  {currentScore === minScore
+                                    ? 'Fair (Lowest)'
+                                    : currentScore === maxScore
+                                    ? 'Exceptional (Highest)'
+                                    : 'Commended'}
+                                </span>
+                              ) : (
+                                <span className="text-amber-400/80 text-[11px] font-medium italic">
+                                  Select a score
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-6 gap-1.5">
+                              {Array.from({ length: maxScore - minScore + 1 }, (_, i) => minScore + i).map((scoreVal) => {
+                                const isSelectedScore = currentScore === scoreVal;
+                                return (
+                                  <button
+                                    key={scoreVal}
+                                    type="button"
+                                    id={`btn-score-${nominee.id}-${scoreVal}`}
+                                    disabled={eligibilityStatus?.hasVoted || !isOpen}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSetNomineeScore(nominee.id, scoreVal);
+                                    }}
+                                    className={`py-2 px-1 rounded-xl text-xs font-bold transition-all text-center flex flex-col items-center justify-center cursor-pointer disabled:cursor-not-allowed ${
+                                      isSelectedScore
+                                        ? 'bg-gradient-to-b from-amber-400 to-[#FF8A00] text-slate-950 ring-2 ring-amber-400 shadow-md shadow-amber-500/30 scale-105 font-black'
+                                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:border-amber-500/50'
+                                    }`}
+                                  >
+                                    <span className="text-sm font-black">{scoreVal}</span>
+                                    <span className="text-[9px] opacity-75 font-normal">
+                                      {scoreVal === minScore ? 'Low' : scoreVal === maxScore ? 'Top' : 'pts'}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // --- SINGLE-CHOICE CARD RENDERING ---
                   return (
                     <div
                       key={nominee.id}
@@ -1136,6 +1530,13 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                             <p className="text-xs text-[#94A3B8] mt-2 line-clamp-3 leading-relaxed">
                               {nominee.bio}
                             </p>
+                          )}
+
+                          {isVoterRestrictedForNominee && (
+                            <div className="mt-2.5 p-2 bg-rose-950/40 rounded-lg border border-rose-500/30 text-rose-300 text-[11px] flex items-center gap-2">
+                              <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                              <span>{nominee.exclusionReason || 'Restricted from voting for this candidate per governance recusal policy.'}</span>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1239,16 +1640,32 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
         <div className="sticky bottom-4 z-40 bg-[#1E293B]/95 backdrop-blur-md p-4 rounded-2xl border border-[#334155] shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-xs text-[#94A3B8] space-y-1">
             <div className="flex items-center gap-2">
-              <span className={`font-bold ${isAllCategoriesCompleted ? 'text-emerald-400' : 'text-[#FF8A00]'}`}>
-                {progressPercentage}% Completed
+              <span className={`font-bold ${isRatingScale ? (isAllScoresCompleted ? 'text-emerald-400' : 'text-amber-400') : (isAllCategoriesCompleted ? 'text-emerald-400' : 'text-[#FF8A00]')}`}>
+                {isRatingScale
+                  ? `${Math.round((scoredCandidatesCount / Math.max(evaluatableNominees.length, 1)) * 100)}% Evaluated`
+                  : `${progressPercentage}% Completed`}
               </span>
               <span>•</span>
               <span>
-                {completedCategoriesCount} of {totalCategories} {totalCategories === 1 ? 'category' : 'categories'} selected
+                {isRatingScale
+                  ? `${scoredCandidatesCount} of ${evaluatableNominees.length} candidates scored`
+                  : `${completedCategoriesCount} of ${totalCategories} ${totalCategories === 1 ? 'category' : 'categories'} selected`}
               </span>
             </div>
             <div>
-              {selectedNominee ? (
+              {isRatingScale ? (
+                <span className="text-slate-300">
+                  {isAllScoresCompleted ? (
+                    <strong className="text-emerald-400 font-semibold">
+                      ✓ All {evaluatableNominees.length} candidates scored (Average: {averageScoreGiven} / {maxScore} pts)
+                    </strong>
+                  ) : (
+                    <span>
+                      Please assign a rating score ({minScore} to {maxScore}) to each candidate ({evaluatableNominees.length - scoredCandidatesCount} remaining)
+                    </span>
+                  )}
+                </span>
+              ) : selectedNominee ? (
                 <span>
                   Active Selection:{' '}
                   <strong className="text-[#F8FAFC] font-bold">{selectedNominee.displayName}</strong>
@@ -1260,22 +1677,41 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
-            <button
-              id="btn-submit-vote"
-              data-testid="btn-open-submit-modal"
-              disabled={!isOpen || !selectedNomineeId || isSubmitting || (categoriesList.length > 1 && !isAllCategoriesCompleted)}
-              onClick={() => handleInstantVote()}
-              className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-[#FF8A00] to-[#E85B00] hover:from-[#E85B00] hover:to-[#FF8A00] text-white rounded-xl text-sm font-black tracking-wide transition-all shadow-lg hover:shadow-[#FF8A00]/25 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Zap className="w-4 h-4 fill-current text-white" />
-              <span>{isSubmitting ? 'Casting Vote...' : 'Cast Vote in an Instant'}</span>
-            </button>
+            {isRatingScale ? (
+              <button
+                id="btn-submit-rating-ballot"
+                disabled={!isOpen || !isAllScoresCompleted || isSubmitting}
+                onClick={() => {
+                  if (!voterSession) {
+                    setCodeError('Please enter and verify your voting code first.');
+                    return;
+                  }
+                  setHasReviewedSelection(false);
+                  setShowConfirmModal(true);
+                }}
+                className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-[#FF8A00] to-amber-500 hover:from-[#E85B00] hover:to-amber-600 text-slate-950 rounded-xl text-sm font-black tracking-wide transition-all shadow-lg hover:shadow-amber-500/25 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 fill-slate-950" />
+                <span>{isSubmitting ? 'Recording Ballot...' : 'Review & Submit Ballot'}</span>
+              </button>
+            ) : (
+              <button
+                id="btn-submit-vote"
+                data-testid="btn-open-submit-modal"
+                disabled={!isOpen || !selectedNomineeId || isSubmitting || (categoriesList.length > 1 && !isAllCategoriesCompleted)}
+                onClick={() => handleInstantVote()}
+                className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-[#FF8A00] to-[#E85B00] hover:from-[#E85B00] hover:to-[#FF8A00] text-white rounded-xl text-sm font-black tracking-wide transition-all shadow-lg hover:shadow-[#FF8A00]/25 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Zap className="w-4 h-4 fill-current text-white" />
+                <span>{isSubmitting ? 'Casting Vote...' : 'Cast Vote in an Instant'}</span>
+              </button>
+            )}
           </div>
         </div>
       )}
 
       {/* CONFIRMATION MODAL WITH SELECTION REVIEW */}
-      {showConfirmModal && selectedNominee && voterSession && (
+      {showConfirmModal && voterSession && (isRatingScale ? true : selectedNominee) && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#1E293B] rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#334155] space-y-5 animate-scaleUp text-[#F8FAFC] my-8">
             {/* Modal Header */}
@@ -1285,72 +1721,115 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                   <ShieldCheck className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-[#F8FAFC] font-display">Review & Confirm Your Vote</h3>
+                  <h3 className="text-lg font-bold text-[#F8FAFC] font-display">
+                    {isRatingScale ? 'Review Your Rating Ballot' : 'Review & Confirm Your Vote'}
+                  </h3>
                   <p className="text-xs text-[#94A3B8] mt-0.5">
-                    Please review your selection before submitting. This vote cannot be modified once cast.
+                    {isRatingScale
+                      ? `Confirm the evaluation scores assigned to all ${evaluatableNominees.length} candidates.`
+                      : 'Please review your selection before submitting. This vote cannot be modified once cast.'}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Candidate Review Card */}
-            <div className="space-y-3">
-              <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-[#FF8A00]" />
-                <span>Selected Candidate Review</span>
-              </div>
-
-              <div className="p-4 bg-[#0F172A] rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-[#0F172A] to-[#0F172A] space-y-3">
-                <div className="flex items-center gap-3.5">
-                  {selectedNominee.photoUrl ? (
-                    <img
-                      src={selectedNominee.photoUrl}
-                      alt={selectedNominee.displayName}
-                      className="w-14 h-14 rounded-xl object-cover border-2 border-[#FF8A00]/50 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#251464] to-[#3a1d94] border-2 border-[#FF8A00]/40 text-[#FF8A00] font-black text-xl flex items-center justify-center shrink-0">
-                      {selectedNominee.displayName.charAt(0)}
-                    </div>
-                  )}
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="text-base font-black text-[#F8FAFC] break-words whitespace-normal leading-tight">
-                        {selectedNominee.displayName}
-                      </h4>
-                      <span className="px-2 py-0.5 rounded-md bg-[#251464] text-[#FF8A00] border border-[#FF8A00]/30 text-[10px] font-bold">
-                        {getNomineeCategory(selectedNominee)}
-                      </span>
-                    </div>
-
-                    {(selectedNominee.roleOrTitle || selectedNominee.department || selectedNominee.unit) && (
-                      <p className="text-xs text-[#94A3B8] mt-0.5 break-words whitespace-normal">
-                        {[selectedNominee.roleOrTitle, selectedNominee.department, selectedNominee.unit]
-                          .filter(Boolean)
-                          .join(' • ')}
-                      </p>
-                    )}
-                  </div>
+            {/* Candidate Review Body */}
+            {isRatingScale ? (
+              <div className="space-y-3">
+                <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    Candidate Scores Breakdown ({evaluatableNominees.length})
+                  </span>
+                  <span className="text-amber-300 font-mono text-xs">
+                    Avg: {averageScoreGiven} / {maxScore} pts
+                  </span>
                 </div>
 
-                {selectedNominee.bio && (
-                  <p className="text-xs text-slate-300/90 italic bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 line-clamp-2">
-                    "{selectedNominee.bio}"
+                <div className="p-3 bg-[#0F172A] rounded-xl border border-slate-800 space-y-2 max-h-56 overflow-y-auto">
+                  {evaluatableNominees.map((nom) => {
+                    const sc = nomineeScores[nom.id];
+                    return (
+                      <div key={nom.id} className="flex justify-between items-center py-1.5 border-b border-slate-800/60 last:border-0 text-xs">
+                        <div className="min-w-0 flex-1 pr-3">
+                          <span className="font-semibold text-white truncate block">{nom.displayName}</span>
+                          <span className="text-[11px] text-slate-400 truncate block">
+                            {[nom.roleOrTitle, nom.department].filter(Boolean).join(' • ')}
+                          </span>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 shrink-0 font-mono">
+                          {sc ?? '—'} / {maxScore} pts
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {currentVoterNominee && (
+                  <p className="text-[11px] text-amber-400/90 italic">
+                    * Per church integrity rules, your own nomination is excluded from receiving a score.
                   </p>
                 )}
               </div>
-            </div>
+            ) : selectedNominee ? (
+              <div className="space-y-3">
+                <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-[#FF8A00]" />
+                  <span>Selected Candidate Review</span>
+                </div>
+
+                <div className="p-4 bg-[#0F172A] rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-[#0F172A] to-[#0F172A] space-y-3">
+                  <div className="flex items-center gap-3.5">
+                    {selectedNominee.photoUrl ? (
+                      <img
+                        src={selectedNominee.photoUrl}
+                        alt={selectedNominee.displayName}
+                        className="w-14 h-14 rounded-xl object-cover border-2 border-[#FF8A00]/50 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#251464] to-[#3a1d94] border-2 border-[#FF8A00]/40 text-[#FF8A00] font-black text-xl flex items-center justify-center shrink-0">
+                        {selectedNominee.displayName.charAt(0)}
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-base font-black text-[#F8FAFC] break-words whitespace-normal leading-tight">
+                          {selectedNominee.displayName}
+                        </h4>
+                        <span className="px-2 py-0.5 rounded-md bg-[#251464] text-[#FF8A00] border border-[#FF8A00]/30 text-[10px] font-bold">
+                          {getNomineeCategory(selectedNominee)}
+                        </span>
+                      </div>
+
+                      {(selectedNominee.roleOrTitle || selectedNominee.department || selectedNominee.unit) && (
+                        <p className="text-xs text-[#94A3B8] mt-0.5 break-words whitespace-normal">
+                          {[selectedNominee.roleOrTitle, selectedNominee.department, selectedNominee.unit]
+                            .filter(Boolean)
+                            .join(' • ')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {selectedNominee.bio && (
+                    <p className="text-xs text-slate-300/90 italic bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 line-clamp-2">
+                      "{selectedNominee.bio}"
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
             {/* Multi-Category Breakdown (if applicable) */}
-            {categoriesList.length > 1 && (
+            {!isRatingScale && categoriesList.length > 1 && (
               <div className="space-y-2">
                 <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-[#FF8A00]" />
                   <span>All Category Choices ({categoriesList.length})</span>
                 </div>
                 <div className="p-3 bg-[#0F172A] rounded-xl border border-slate-800 space-y-1.5 max-h-36 overflow-y-auto">
-                  {categoriesList.map((cat) => {
+                  {categoriesList.map((cat: string) => {
                     const selId = categorySelections[cat];
                     const selNom = nominees.find((n) => n.id === selId);
                     return (
@@ -1401,10 +1880,12 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
               />
               <div className="text-xs space-y-0.5">
                 <span className="font-bold text-[#F8FAFC]">
-                  I have reviewed my selection above and confirm this is my final official vote.
+                  {isRatingScale
+                    ? 'I have reviewed my scores above and confirm this is my final official rating ballot.'
+                    : 'I have reviewed my selection above and confirm this is my final official vote.'}
                 </span>
                 <p className="text-[11px] text-[#94A3B8]">
-                  I acknowledge that once submitted, this vote will be written permanently to Firestore and cannot be amended.
+                  I acknowledge that once submitted, this ballot will be written permanently to Firestore and cannot be amended.
                 </p>
               </div>
             </label>
@@ -1417,26 +1898,26 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                 onClick={() => setShowConfirmModal(false)}
                 className="w-full sm:w-auto px-4 py-2.5 text-[#94A3B8] hover:text-[#F8FAFC] text-xs font-semibold rounded-xl hover:bg-slate-800 transition-colors text-center"
               >
-                Cancel & Edit Selection
+                Cancel & Edit
               </button>
 
               <button
                 id="btn-confirm-final-vote"
                 type="button"
                 disabled={isSubmitting || !hasReviewedSelection}
-                onClick={handleConfirmVote}
-                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-[#FF8A00] to-[#E85B00] hover:from-[#E85B00] hover:to-[#FF8A00] text-white rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                onClick={isRatingScale ? handleConfirmScoreBallot : handleConfirmVote}
+                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-[#FF8A00] to-amber-500 hover:from-[#E85B00] hover:to-amber-600 text-slate-950 rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
                 title={!hasReviewedSelection ? 'Please check the review confirmation box first' : undefined}
               >
                 {isSubmitting ? (
                   <>
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Recording Vote...</span>
+                    <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                    <span>Recording Ballot...</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Confirm & Submit Vote</span>
+                    <span>{isRatingScale ? 'Confirm & Submit Rating Ballot' : 'Confirm & Submit Vote'}</span>
                   </>
                 )}
               </button>

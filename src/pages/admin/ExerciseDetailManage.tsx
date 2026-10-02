@@ -28,7 +28,10 @@ import {
   assignEligibilityBatch,
   removeEligibility,
   getPeople,
-  getVotingResults
+  getVotingResults,
+  CORE_VOTING_CRITERIA,
+  setStandardCoreCriteriaForExercise,
+  replaceAllActiveExerciseCriteria
 } from '../../services/db';
 import { useAuth } from '../../context/AuthContext';
 import { useActionModal } from '../../context/ActionModalContext';
@@ -128,6 +131,8 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
   const [nomPhoto, setNomPhoto] = useState('');
   const [nomBio, setNomBio] = useState('');
   const [nomPersonId, setNomPersonId] = useState('');
+  const [nomExcludedVoterIds, setNomExcludedVoterIds] = useState<string[]>([]);
+  const [nomExclusionReason, setNomExclusionReason] = useState<string>('');
 
   // Eligibility Assign Modal
   const [isAssignOpen, setIsAssignOpen] = useState(false);
@@ -459,6 +464,62 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
     });
   };
 
+  const [replacingCriteria, setReplacingCriteria] = useState(false);
+
+  const handleApplyCoreCriteria = async () => {
+    if (!exercise) return;
+    const confirmed = window.confirm(
+      `Replace all active criteria for "${exercise.title}" with the 6 standard church core criteria:\n\n1. Honour\n2. Excellence\n3. Accountability\n4. Results\n5. Transforming Love\n6. Innovation\n\nProceed?`
+    );
+    if (!confirmed) return;
+
+    setReplacingCriteria(true);
+    try {
+      const newCrits = await setStandardCoreCriteriaForExercise(exercise.id, actor);
+      setCriteria(newCrits);
+      notifyAction({
+        type: 'update',
+        title: 'Core Criteria Applied',
+        details: `Replaced criteria with 6 core church values: Honour, Excellence, Accountability, Results, Transforming Love, and Innovation.`,
+        resourceName: exercise.title,
+        actorName: actor.name,
+        actorRole: actor.role
+      });
+      loadData();
+    } catch (err) {
+      console.error('Error applying core criteria:', err);
+      alert('Failed to apply core criteria.');
+    } finally {
+      setReplacingCriteria(false);
+    }
+  };
+
+  const handleApplyCoreCriteriaToAllActive = async () => {
+    const confirmed = window.confirm(
+      `CRITICAL ACTION:\nAre you sure you want to replace ALL active criteria across ALL active/draft/open voting cycles with the 6 core criteria (Honour, Excellence, Accountability, Results, Transforming Love, Innovation)?`
+    );
+    if (!confirmed) return;
+
+    setReplacingCriteria(true);
+    try {
+      const res = await replaceAllActiveExerciseCriteria(actor);
+      notifyAction({
+        type: 'update',
+        title: 'Core Criteria Applied Everywhere',
+        details: `Replaced criteria across ${res.updatedCount} voting cycles with: Honour, Excellence, Accountability, Results, Transforming Love, Innovation.`,
+        resourceName: 'All Active Cycles',
+        actorName: actor.name,
+        actorRole: actor.role
+      });
+      loadData();
+    } catch (err) {
+      console.error('Error applying core criteria to all exercises:', err);
+      alert('Failed to apply core criteria to all exercises.');
+    } finally {
+      setReplacingCriteria(false);
+    }
+  };
+
   // Nominee Handlers
   const handleOpenAddNominee = () => {
     setEditingNom(null);
@@ -467,6 +528,8 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
     setNomPhoto('');
     setNomBio('');
     setNomPersonId('');
+    setNomExcludedVoterIds([]);
+    setNomExclusionReason('');
     setIsAddNomOpen(true);
   };
 
@@ -477,6 +540,8 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
     setNomPhoto(nom.photoUrl || '');
     setNomBio(nom.bio || '');
     setNomPersonId(nom.personId || '');
+    setNomExcludedVoterIds(nom.excludedVoterIds || []);
+    setNomExclusionReason(nom.exclusionReason || '');
     setIsAddNomOpen(true);
   };
 
@@ -493,7 +558,9 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
           roleOrTitle: nomRole.trim(),
           photoUrl: nomPhoto.trim(),
           bio: nomBio.trim(),
-          personId: nomPersonId || undefined
+          personId: nomPersonId || undefined,
+          excludedVoterIds: nomExcludedVoterIds,
+          exclusionReason: nomExclusionReason.trim()
         },
         actor
       );
@@ -513,7 +580,9 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
           roleOrTitle: nomRole.trim(),
           photoUrl: nomPhoto.trim(),
           bio: nomBio.trim(),
-          personId: nomPersonId || undefined
+          personId: nomPersonId || undefined,
+          excludedVoterIds: nomExcludedVoterIds,
+          exclusionReason: nomExclusionReason.trim()
         },
         actor
       );
@@ -534,6 +603,8 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
     setNomPhoto('');
     setNomBio('');
     setNomPersonId('');
+    setNomExcludedVoterIds([]);
+    setNomExclusionReason('');
     loadData();
   };
 
@@ -1013,9 +1084,25 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
                 </div>
 
                 <div>
+                  <label className="text-[#94A3B8] block mb-1">Voting Model & Rules</label>
+                  <div className="p-2.5 bg-[#334155] rounded-xl border border-slate-700 text-[#F8FAFC] font-medium flex items-center justify-between">
+                    <span>
+                      {exercise.votingMode === 'rating_scale'
+                        ? `Workforce Nominee Rating Scale (${exercise.minScore || 5}–${exercise.maxScore || 10} pts)`
+                        : 'Standard Ballot (Single Choice)'}
+                    </span>
+                    {exercise.votingMode === 'rating_scale' && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold">
+                        Scale Evaluation
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
                   <label className="text-[#94A3B8] block mb-1">Self-Voting Permitted?</label>
                   <div className="p-2.5 bg-[#334155] rounded-xl border border-slate-700 text-[#F8FAFC] font-medium">
-                    {exercise.allowSelfVote ? 'Yes, nominees may vote for themselves' : 'No, self-voting is restricted'}
+                    {exercise.allowSelfVote ? 'Yes, nominees may vote for themselves' : 'No, self-voting is restricted (members cannot vote for themselves)'}
                   </div>
                 </div>
               </div>
@@ -1055,18 +1142,58 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
       {activeTab === 'criteria' && (
         <div className="space-y-6">
           <div className="bg-[#1E293B] rounded-3xl border border-slate-800 p-6 space-y-5">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               <div>
-                <h3 className="text-base font-bold font-display text-[#F8FAFC]">Custom Evaluation Criteria</h3>
-                <p className="text-xs text-[#94A3B8]">Configure what voters consider when reviewing nominees.</p>
+                <h3 className="text-base font-bold font-display text-[#F8FAFC]">Evaluation Criteria</h3>
+                <p className="text-xs text-[#94A3B8]">Configure core values and standards voters evaluate nominees against.</p>
               </div>
-              <button
-                onClick={handleOpenAddCriterion}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#FF8A00] to-[#E85B00] text-slate-950 rounded-xl text-xs font-bold shadow-md shadow-[#FF8A00]/25 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Criterion</span>
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  id="btn-apply-core-criteria"
+                  onClick={handleApplyCoreCriteria}
+                  disabled={replacingCriteria}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#251464] hover:bg-[#341d8a] text-[#FF8A00] border border-[#FF8A00]/40 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer disabled:opacity-50"
+                  title="Replace with Honour, Excellence, Accountability, Results, Transforming Love, and Innovation"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{replacingCriteria ? 'Applying...' : 'Apply Core Criteria (H.E.A.R.T.I.)'}</span>
+                </button>
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    id="btn-apply-core-criteria-all"
+                    onClick={handleApplyCoreCriteriaToAllActive}
+                    disabled={replacingCriteria}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-medium transition-all cursor-pointer disabled:opacity-50"
+                    title="Apply to ALL active cycles"
+                  >
+                    <span>Apply to All Active Cycles</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleOpenAddCriterion}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#FF8A00] to-[#E85B00] text-slate-950 rounded-xl text-xs font-bold shadow-md shadow-[#FF8A00]/25 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Criterion</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Core Values Preview Banner */}
+            <div className="p-3.5 bg-gradient-to-r from-[#251464]/30 via-slate-900 to-slate-900 border border-[#FF8A00]/25 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 shrink-0">
+                <Sparkles className="w-4 h-4 text-[#FF8A00] shrink-0" />
+                <span className="font-bold text-[#F8FAFC]">Standard Church Core Criteria (H.E.A.R.T.I.):</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                {CORE_VOTING_CRITERIA.map((c) => (
+                  <span key={c.title} className="px-2 py-0.5 rounded-lg bg-[#0F172A] border border-slate-700 font-semibold text-amber-300">
+                    {c.title}
+                  </span>
+                ))}
+              </div>
             </div>
 
             {criteria.length === 0 ? (
@@ -1168,6 +1295,17 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
               </button>
             </div>
 
+            {/* Voter Restriction Guidance Banner */}
+            <div className="p-3.5 bg-slate-900/90 border border-slate-700/80 rounded-2xl flex items-start gap-3 text-xs">
+              <ShieldAlert className="w-4 h-4 text-[#FF8A00] shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <span className="font-bold text-[#F8FAFC]">How to Restrict an Eligible Voter from a Candidate:</span>
+                <p className="text-[#94A3B8] leading-relaxed">
+                  Click the <strong className="text-amber-300 font-semibold">&ldquo;Restrict Voters&rdquo;</strong> button on any nominee card below to select eligible members who must be recused from voting for that individual (e.g. self-voting prevention, direct supervisors, family members, or conflict of interest). Restricted voters can still vote freely for all other candidates on their ballot.
+                </p>
+              </div>
+            </div>
+
             {nominees.length === 0 ? (
               <div className="py-12 text-center text-[#94A3B8] text-xs border border-dashed border-slate-800 rounded-2xl">
                 No nominees registered yet. Add official candidates or link from the Church Member Directory.
@@ -1210,6 +1348,12 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
                             <span className="truncate">Linked to Church Member Registry</span>
                           </div>
                         )}
+                        {nom.excludedVoterIds && nom.excludedVoterIds.length > 0 && (
+                          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 w-fit">
+                            <ShieldAlert className="w-3 h-3 text-amber-400 shrink-0" />
+                            <span>{nom.excludedVoterIds.length} voter(s) restricted</span>
+                          </div>
+                        )}
                         {nom.bio && <p className="text-[#94A3B8] mt-1 line-clamp-2 text-[11px] leading-relaxed">{nom.bio}</p>}
                       </div>
                     </div>
@@ -1244,7 +1388,23 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
                       </button>
                       <button
                         onClick={() => handleOpenEditNominee(nom)}
-                        title="Edit Candidate"
+                        title={`Configure Restricted Voters for ${nom.displayName}`}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          nom.excludedVoterIds && nom.excludedVoterIds.length > 0
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                            : 'bg-slate-800 text-[#94A3B8] border border-slate-700 hover:text-[#FF8A00] hover:border-[#FF8A00]/40'
+                        }`}
+                      >
+                        <ShieldAlert className="w-3.5 h-3.5 text-[#FF8A00]" />
+                        <span>
+                          {nom.excludedVoterIds && nom.excludedVoterIds.length > 0
+                            ? `${nom.excludedVoterIds.length} Restricted`
+                            : 'Restrict Voters'}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => handleOpenEditNominee(nom)}
+                        title="Edit Candidate Profile"
                         className="p-1.5 text-[#94A3B8] hover:text-[#FF8A00] rounded-lg hover:bg-slate-700 transition-colors cursor-pointer"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -1432,10 +1592,30 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
                   <Crown className="w-8 h-8 fill-slate-950 text-slate-950" />
                 </div>
                 <div>
-                  <div className="text-xs uppercase font-bold text-[#FF8A00] tracking-wider">Current Leader / Winner</div>
+                  <div className="text-xs uppercase font-bold text-[#FF8A00] tracking-wider">
+                    {exercise.votingMode === 'rating_scale' ? 'Top Rated Nominee / Winner' : 'Current Leader / Winner'}
+                  </div>
                   <div className="text-xl font-bold font-display">{results.winners[0].displayName}</div>
                   <div className="text-xs text-[#94A3B8]">
-                    {results.winners[0].voteCount} votes ({results.winners[0].percentage}% of total cast)
+                    {exercise.votingMode === 'rating_scale' ? (
+                      <span className="flex flex-wrap items-center gap-2 mt-0.5">
+                        <strong className="text-amber-300 font-bold text-sm font-mono">
+                          {results.winners[0].scoreOver100 ?? results.winners[0].percentage}% / 100% (Score Over 100%)
+                        </strong>
+                        <span>•</span>
+                        <span className="text-white font-medium">
+                          {results.winners[0].totalScore ?? results.winners[0].voteCount} Total Points
+                        </span>
+                        <span>•</span>
+                        <span className="text-slate-300">
+                          Avg: {results.winners[0].averageScore ?? 0} / {exercise.maxScore || 10} pts
+                        </span>
+                        <span>•</span>
+                        <span>{results.winners[0].ratingCount ?? results.winners[0].ratingsCount ?? results.totalVotes} Evaluations</span>
+                      </span>
+                    ) : (
+                      <span>{results.winners[0].voteCount} votes ({results.winners[0].percentage}% of total cast)</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1833,6 +2013,94 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
                   onChange={(e) => setNomBio(e.target.value)}
                   className="w-full px-3 py-2 bg-[#334155] border border-slate-700 rounded-xl text-xs text-[#F8FAFC] placeholder:text-[#94A3B8] resize-none focus:outline-none focus:border-[#FF8A00]"
                 />
+              </div>
+
+              {/* Restricted / Recused Voters for this Nominee */}
+              <div className="pt-3 border-t border-slate-700/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-amber-300 flex items-center gap-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                    Restricted / Recused Voters for this Nominee
+                  </label>
+                  <span className="text-[10px] text-[#94A3B8] font-mono">
+                    {nomExcludedVoterIds.length} restricted
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#94A3B8] leading-relaxed">
+                  Select eligible members who are restricted from voting for this particular candidate (e.g. conflict of interest, direct supervision, or family recusal).
+                </p>
+
+                <div className="max-h-36 overflow-y-auto space-y-1 p-2 bg-[#0F172A] rounded-xl border border-slate-700">
+                  {eligibilityList.length > 0 ? (
+                    eligibilityList.map((el) => {
+                      const isChecked = nomExcludedVoterIds.includes(el.personId);
+                      return (
+                        <label
+                          key={el.id}
+                          className={`flex items-center justify-between p-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
+                            isChecked ? 'bg-amber-500/15 text-amber-200 border border-amber-500/30' : 'hover:bg-slate-800 text-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setNomExcludedVoterIds((prev) => [...prev, el.personId]);
+                                } else {
+                                  setNomExcludedVoterIds((prev) => prev.filter((id) => id !== el.personId));
+                                }
+                              }}
+                              className="rounded text-[#FF8A00] focus:ring-[#FF8A00] border-slate-600 bg-slate-800"
+                            />
+                            <span className="truncate">{el.voterName}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-mono shrink-0">{el.voterCode}</span>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    people.map((p) => {
+                      const isChecked = nomExcludedVoterIds.includes(p.id);
+                      return (
+                        <label
+                          key={p.id}
+                          className={`flex items-center justify-between p-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
+                            isChecked ? 'bg-amber-500/15 text-amber-200 border border-amber-500/30' : 'hover:bg-slate-800 text-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setNomExcludedVoterIds((prev) => [...prev, p.id]);
+                                } else {
+                                  setNomExcludedVoterIds((prev) => prev.filter((id) => id !== p.id));
+                                }
+                              }}
+                              className="rounded text-[#FF8A00] focus:ring-[#FF8A00] border-slate-600 bg-slate-800"
+                            />
+                            <span className="truncate">{p.fullName}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 truncate">{p.departmentName || p.roleTitle}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Recusal reason (e.g. Conflict of interest, department recusal)"
+                    value={nomExclusionReason}
+                    onChange={(e) => setNomExclusionReason(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-[#0F172A] border border-slate-700 rounded-lg text-xs text-[#F8FAFC] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#FF8A00]"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">

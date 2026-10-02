@@ -116,6 +116,8 @@ export interface Nominee {
   organisationName?: string;
   photoUrl?: string;
   bio?: string;
+  excludedVoterIds?: string[]; // Array of voter Person IDs barred from voting for this nominee
+  exclusionReason?: string;    // Reason for exclusion / recusal
   active: boolean;
   order: number;
   createdAt: string;
@@ -142,7 +144,10 @@ export interface VotingExercise {
   resultsVisibilityMode?: 'admin_only' | 'publish_after_close' | 'manual_publish';
   allowSelfVote: boolean;
   maxVotesPerPerson?: number;
-  votingMode: 'single_choice';
+  votingMode: 'single_choice' | 'rating_scale';
+  minScore?: number; // e.g. 5
+  maxScore?: number; // e.g. 10
+  scoringDescription?: string;
   voterSelectionMode?: VoterSelectionMode;
   nomineeSelectionMode?: NomineeSelectionMode;
   criteriaCount?: number;
@@ -171,8 +176,10 @@ export interface Eligibility {
 export interface Vote {
   id: string;
   votingExerciseId: string;
-  nomineeId: string;
+  nomineeId?: string; // used for single_choice
   voterId: string; // Person ID or Anonymous Voter Hash
+  scores?: Record<string, number>; // nomineeId -> score (e.g. 5 to 10)
+  totalScore?: number;
   timestamp: string;
   receiptHash?: string;
 }
@@ -185,6 +192,11 @@ export interface NomineeResult {
   department?: string;
   voteCount: number;
   percentage: number;
+  totalScore?: number;
+  averageScore?: number;
+  ratingsCount?: number;
+  ratingCount?: number;
+  scoreOver100?: number; // Total evaluation score scaled over 100%
 }
 
 export interface VotingResult {

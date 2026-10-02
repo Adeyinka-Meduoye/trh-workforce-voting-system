@@ -630,8 +630,8 @@ export async function getOrganisations(includeArchived = false, forceRefresh = f
     try {
       const orgsRef = collection(db, 'organisations');
       const snap = await getDocs(orgsRef);
-      let orgs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organisation));
-      
+      let orgs = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Organisation));
+
       if (orgs.length === 0) {
         orgs = DEFAULT_ORGANISATIONS;
       }
@@ -783,8 +783,8 @@ export async function getDepartments(organisationId?: string, includeArchived = 
     try {
       const deptsRef = collection(db, 'departments');
       const snap = await getDocs(deptsRef);
-      let depts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department));
-      
+      let depts = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Department));
+
       if (depts.length === 0) {
         depts = DEFAULT_DEPARTMENTS;
       }
@@ -985,7 +985,7 @@ export async function getUnits(
     try {
       const unitsRef = collection(db, 'units');
       const snap = await getDocs(unitsRef);
-      let units = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Unit));
+      let units = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Unit));
       units.sort((a, b) => a.name.localeCompare(b.name));
       dbCache.set(masterKey, units, 86400000); // 24 hours TTL
 
@@ -1301,7 +1301,7 @@ export async function getMemberships(filters?: {
     } else {
       snap = await getDocs(ref);
     }
-    let list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Membership));
+    let list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Membership));
 
     if (filters?.personId) {
       list = list.filter(m => m.personId === filters.personId);
@@ -1378,8 +1378,7 @@ export async function createMembership(
     'Created Membership',
     'membership',
     membership.id,
-    `Added membership for person ${data.personId} in ${resolved.organisationName}${
-      resolved.departmentName ? ' / ' + resolved.departmentName : ''
+    `Added membership for person ${data.personId} in ${resolved.organisationName}${resolved.departmentName ? ' / ' + resolved.departmentName : ''
     }${resolved.unitName ? ' / ' + resolved.unitName : ''}`,
     membership
   );
@@ -1529,24 +1528,27 @@ export async function getPeople(
 
       const membershipsByPerson: Record<string, Membership[]> = {};
       membershipsSnap.docs.forEach(d => {
-        const m = { id: d.id, ...d.data() } as Membership;
-        if (!membershipsByPerson[m.personId]) {
-          membershipsByPerson[m.personId] = [];
+        const data = d.data();
+        const m = { ...data, id: d.id } as Membership;
+        if (m.personId) {
+          if (!membershipsByPerson[m.personId]) {
+            membershipsByPerson[m.personId] = [];
+          }
+          membershipsByPerson[m.personId].push(m);
         }
-        membershipsByPerson[m.personId].push(m);
       });
 
       let allPeople = peopleSnap.docs.map(doc => {
-        const data = doc.data() as Person;
+        const data = doc.data();
         const personMemberships = membershipsByPerson[doc.id] || [];
         return {
-          id: doc.id,
           ...data,
+          id: doc.id,
           memberships: personMemberships
         } as Person;
       });
 
-      allPeople.sort((a, b) => a.fullName.localeCompare(b.fullName));
+      allPeople.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
       dbCache.set(masterKey, allPeople, 14400000); // 4 hours TTL
 
       let people = allPeople;
@@ -1837,7 +1839,7 @@ export async function getVotingExercises(filters?: {
     try {
       const ref = collection(db, 'votingExercises');
       const snap = await getDocs(ref);
-      let exercises = snap.docs.map(d => ({ id: d.id, ...d.data() } as VotingExercise));
+      let exercises = snap.docs.map(d => ({ ...d.data(), id: d.id } as VotingExercise));
 
       // Sort by startTime descending
       exercises.sort((a, b) => new Date(b.startTime || b.createdAt).getTime() - new Date(a.startTime || a.createdAt).getTime());
@@ -2097,7 +2099,7 @@ export async function createVotingExercise(
     scopeType?: VotingScopeType;
     createdBy?: string;
     criteria?: Array<{ title: string; description?: string; order: number }>;
-    nominees?: Array<{ displayName: string; roleOrTitle?: string; department?: string; unit?: string; organisationName?: string; photoUrl?: string; bio?: string; personId?: string; order: number }>;
+    nominees?: Array<{ displayName: string; roleOrTitle?: string; department?: string; unit?: string; organisationName?: string; photoUrl?: string; bio?: string; personId?: string; excludedVoterIds?: string[]; exclusionReason?: string; order: number }>;
   },
   actor: { id: string; name: string; email?: string }
 ): Promise<VotingExercise> {
@@ -2132,7 +2134,10 @@ export async function createVotingExercise(
     resultsVisibilityMode: data.resultsVisibilityMode || 'admin_only',
     allowSelfVote: data.allowSelfVote ?? false,
     maxVotesPerPerson: data.maxVotesPerPerson || 1,
-    votingMode: 'single_choice',
+    votingMode: data.votingMode || 'single_choice',
+    minScore: data.votingMode === 'rating_scale' ? (data.minScore ?? 5) : undefined,
+    maxScore: data.votingMode === 'rating_scale' ? (data.maxScore ?? 10) : undefined,
+    scoringDescription: data.scoringDescription || undefined,
     voterSelectionMode: data.voterSelectionMode || 'scope_members',
     nomineeSelectionMode: data.nomineeSelectionMode || 'manual_selection',
     criteriaCount: data.criteria?.length || 0,
@@ -2182,6 +2187,8 @@ export async function createVotingExercise(
         organisationName: n.organisationName || validatedScope.organisationName || '',
         photoUrl: n.photoUrl || '',
         bio: n.bio || '',
+        excludedVoterIds: n.excludedVoterIds || [],
+        exclusionReason: n.exclusionReason || '',
         active: true,
         order: n.order ?? i + 1,
         createdAt: now,
@@ -2316,9 +2323,8 @@ export async function extendVotingPeriod(
 
   const previousFormatted = new Date(existing.endTime).toLocaleString();
   const newFormatted = new Date(newEndTime).toLocaleString();
-  const details = `Extended voting period for "${existing.title}" from ${previousFormatted} to ${newFormatted}${
-    options.reason ? ` (Reason: ${options.reason})` : ''
-  }${updates.status ? ` and set status to ${updates.status.toUpperCase()}` : ''}`;
+  const details = `Extended voting period for "${existing.title}" from ${previousFormatted} to ${newFormatted}${options.reason ? ` (Reason: ${options.reason})` : ''
+    }${updates.status ? ` and set status to ${updates.status.toUpperCase()}` : ''}`;
 
   await logAuditEvent(
     actor,
@@ -2416,7 +2422,7 @@ export async function getCriteria(exerciseId: string, activeOnly = false, forceR
     try {
       const ref = collection(db, 'votingExercises', exerciseId, 'criteria');
       const snap = await getDocs(ref);
-      let list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Criterion));
+      let list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Criterion));
       if (activeOnly) {
         list = list.filter(c => c.active !== false);
       }
@@ -2518,6 +2524,112 @@ export async function reorderCriteria(
   await logAuditEvent(actor, 'Reordered Criteria', 'criterion', exerciseId, `Reordered criteria for exercise ${exerciseId}`);
 }
 
+export const CORE_VOTING_CRITERIA: Array<{ title: string; description: string; order: number }> = [
+  {
+    title: 'Honour',
+    description: 'Faithful reverence, godly respect for leaders and brethren, humility, and sacred esteem for kingdom principles and church culture.',
+    order: 1
+  },
+  {
+    title: 'Excellence',
+    description: 'High quality of execution, diligence, spiritual reverence, and extraordinary standards in all kingdom duties in the house of God.',
+    order: 2
+  },
+  {
+    title: 'Accountability',
+    description: 'Integrity, transparency, dependability, punctuality, and faithful stewardship of assigned duties, time, and church resources.',
+    order: 3
+  },
+  {
+    title: 'Results',
+    description: 'Fruitfulness, measurable outcomes, kingdom impact, and steadfast completion of ministerial objectives and targets.',
+    order: 4
+  },
+  {
+    title: 'Transforming Love',
+    description: 'Christlike compassion, selfless service, empathy, mutual support, emotional maturity, and unconditional care within the workforce.',
+    order: 5
+  },
+  {
+    title: 'Innovation',
+    description: 'Forward-thinking creativity, proactive problem-solving, inspired solutions, and progressive excellence to advance church operations.',
+    order: 6
+  }
+];
+
+export async function setStandardCoreCriteriaForExercise(
+  exerciseId: string,
+  actor: { id: string; name: string; email?: string }
+): Promise<Criterion[]> {
+  const critRef = collection(db, 'votingExercises', exerciseId, 'criteria');
+  const snap = await getDocs(critRef);
+
+  // Delete existing criteria
+  for (const d of snap.docs) {
+    await deleteDoc(d.ref);
+  }
+
+  const now = new Date().toISOString();
+  const created: Criterion[] = [];
+
+  for (const c of CORE_VOTING_CRITERIA) {
+    const newDocRef = doc(critRef);
+    const item: Criterion = {
+      id: newDocRef.id,
+      votingExerciseId: exerciseId,
+      title: c.title,
+      description: c.description,
+      order: c.order,
+      active: true,
+      createdAt: now,
+      updatedAt: now
+    };
+    await setDoc(newDocRef, item);
+    created.push(item);
+  }
+
+  // Update criteriaCount
+  const exDocRef = doc(db, 'votingExercises', exerciseId);
+  await updateDoc(exDocRef, {
+    criteriaCount: CORE_VOTING_CRITERIA.length,
+    updatedAt: now
+  });
+
+  dbCache.invalidate(`criteria_${exerciseId}`);
+  dbCache.invalidate(`criteria_${exerciseId}_true`);
+  dbCache.invalidate(`criteria_${exerciseId}_false`);
+  dbCache.invalidate('exercises');
+  dbCache.invalidate('voting_exercises_master');
+  dbCache.invalidate('voting_exercises_active');
+
+  await logAuditEvent(
+    actor,
+    'Applied Core Criteria (H.E.A.R.T.I.)',
+    'criterion',
+    exerciseId,
+    `Applied standard core criteria: Honour, Excellence, Accountability, Results, Transforming Love, and Innovation to exercise ${exerciseId}`
+  );
+
+  return created;
+}
+
+export async function replaceAllActiveExerciseCriteria(
+  actor: { id: string; name: string; email?: string }
+): Promise<{ updatedCount: number; titles: string[] }> {
+  const exercises = await getVotingExercises({ includeArchived: false });
+  const activeExercises = exercises.filter(
+    (e) => e.status === 'open' || e.status === 'scheduled' || e.status === 'draft' || e.status === 'closed'
+  );
+
+  const titles: string[] = [];
+  for (const ex of activeExercises) {
+    await setStandardCoreCriteriaForExercise(ex.id, actor);
+    titles.push(ex.title);
+  }
+
+  return { updatedCount: titles.length, titles };
+}
+
 // ==========================================
 // NOMINEES CMS
 // ==========================================
@@ -2532,7 +2644,7 @@ export async function getNominees(exerciseId: string, activeOnly = false, forceR
     try {
       const ref = collection(db, 'votingExercises', exerciseId, 'nominees');
       const snap = await getDocs(ref);
-      let list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Nominee));
+      let list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Nominee));
       if (activeOnly) {
         list = list.filter(n => n.active !== false);
       }
@@ -2557,6 +2669,8 @@ export async function addNominee(
     department?: string;
     photoUrl?: string;
     bio?: string;
+    excludedVoterIds?: string[];
+    exclusionReason?: string;
     order?: number;
   },
   actor: { id: string; name: string; email?: string }
@@ -2592,6 +2706,8 @@ export async function addNominee(
     organisationName: (data as any).organisationName || exData?.organisationName || '',
     photoUrl: resolvedPhoto,
     bio: data.bio || '',
+    excludedVoterIds: data.excludedVoterIds || [],
+    exclusionReason: data.exclusionReason || '',
     active: true,
     order: nextOrder,
     createdAt: now,
@@ -2677,7 +2793,7 @@ export async function getEligibleVotersForExercise(exerciseId: string, forceRefr
   try {
     const ref = collection(db, 'votingExercises', exerciseId, 'eligibility');
     const snap = await getDocs(ref);
-    const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Eligibility));
+    const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Eligibility));
     dbCache.set(cacheKey, list, 1800000); // 30 mins TTL
     return list;
   } catch (error) {
@@ -2833,14 +2949,25 @@ export interface VoteSubmissionResult {
 
 export async function submitVote(
   exerciseId: string,
-  nomineeId: string,
-  voter: { personId: string; voterName: string; voterCode?: string; voterEmail?: string }
+  nomineeIdOrScores: string | Record<string, number>,
+  voter: { personId: string; voterName: string; voterCode?: string; voterEmail?: string },
+  options?: { scores?: Record<string, number> }
 ): Promise<VoteSubmissionResult> {
   try {
     const exerciseRef = doc(db, 'votingExercises', exerciseId);
-    const nomineeRef = doc(db, 'votingExercises', exerciseId, 'nominees', nomineeId);
     const eligRef = doc(db, 'votingExercises', exerciseId, 'eligibility', voter.personId);
     const voteRef = doc(collection(db, 'votingExercises', exerciseId, 'votes'));
+
+    const isScoreBallotInput = typeof nomineeIdOrScores === 'object' || !!(options?.scores);
+    const candidateScores: Record<string, number> | undefined = typeof nomineeIdOrScores === 'object'
+      ? nomineeIdOrScores
+      : options?.scores;
+    const singleNomineeId: string | undefined = typeof nomineeIdOrScores === 'string' && nomineeIdOrScores.trim()
+      ? nomineeIdOrScores.trim()
+      : undefined;
+
+    // Fetch exercise nominees beforehand to validate candidates and self-voting
+    const allNominees = await getNominees(exerciseId);
 
     const result = await runTransaction(db, async (transaction) => {
       // 1. Fetch exercise doc
@@ -2849,6 +2976,7 @@ export async function submitVote(
         return { success: false, code: 'VOTING_NOT_FOUND', message: 'Voting exercise not found.' };
       }
       const exercise = exerciseSnap.data() as VotingExercise;
+      const isRatingScale = exercise.votingMode === 'rating_scale' || isScoreBallotInput;
 
       // 2. Validate Exercise Status
       const now = new Date();
@@ -2867,22 +2995,7 @@ export async function submitVote(
         return { success: false, code: 'VOTING_EXPIRED', message: 'Voting deadline has passed.' };
       }
 
-      // 3. Validate Nominee exists and is active
-      const nomineeSnap = await transaction.get(nomineeRef);
-      if (!nomineeSnap.exists()) {
-        return { success: false, code: 'NOMINEE_NOT_FOUND', message: 'Selected nominee was not found.' };
-      }
-      const nominee = nomineeSnap.data() as Nominee;
-      if (nominee.active === false) {
-        return { success: false, code: 'INVALID_NOMINEE', message: 'The selected nominee is currently inactive.' };
-      }
-
-      // 4. Validate Self-Voting rule
-      if (!exercise.allowSelfVote && nominee.personId && nominee.personId === voter.personId) {
-        return { success: false, code: 'SELF_VOTE_NOT_ALLOWED', message: 'Self-voting is not permitted for this exercise.' };
-      }
-
-      // 5. Check Eligibility and Double Voting
+      // 3. Check Eligibility and Double Voting
       const eligSnap = await transaction.get(eligRef);
       if (!eligSnap.exists() || eligSnap.data()?.eligible !== true) {
         return { success: false, code: 'NOT_ELIGIBLE', message: 'You are not on the verified voter registry for this exercise.' };
@@ -2890,6 +3003,98 @@ export async function submitVote(
       const eligData = eligSnap.data() as Eligibility;
       if (eligData.hasVoted) {
         return { success: false, code: 'ALREADY_VOTED', message: 'You have already submitted a vote for this exercise.' };
+      }
+
+      // Check if this voter is one of the nominated candidates in this exercise
+      const selfNominee = allNominees.find(
+        (n) => n.personId === voter.personId || (n.displayName && voter.voterName && n.displayName.trim().toLowerCase() === voter.voterName.trim().toLowerCase())
+      );
+
+      let recordedScores: Record<string, number> | undefined = undefined;
+      let calculatedTotalScore = 0;
+      let recordedNomineeId: string | undefined = undefined;
+
+      if (isRatingScale) {
+        // --- SCORE-BASED / RATING SCALE BALLOT (e.g. 5 to 10 points) ---
+        if (!candidateScores || Object.keys(candidateScores).length === 0) {
+          return { success: false, code: 'INVALID_REQUEST', message: 'Please provide rating scores for the nominees.' };
+        }
+
+        const minScore = exercise.minScore ?? 5;
+        const maxScore = exercise.maxScore ?? 10;
+        const scoreEntries = Object.entries(candidateScores);
+
+        // Self-nomination restriction: "Then the eligible members can’t vote for a particular nominee [themselves], but they can vote for others"
+        if (selfNominee && candidateScores[selfNominee.id] !== undefined) {
+          return {
+            success: false,
+            code: 'SELF_VOTE_NOT_ALLOWED',
+            message: 'In accordance with voting integrity rules, members nominated in this cycle cannot vote for or score themselves. Please evaluate the other candidates.'
+          };
+        }
+
+        // Validate score boundaries (e.g. 5 as lowest, 10 as highest)
+        for (const [nId, score] of scoreEntries) {
+          const matchedNominee = allNominees.find((n) => n.id === nId);
+          if (!matchedNominee || matchedNominee.active === false) {
+            return { success: false, code: 'INVALID_NOMINEE', message: `Nominee ${nId} is invalid or inactive.` };
+          }
+          if (matchedNominee.personId === voter.personId) {
+            return {
+              success: false,
+              code: 'SELF_VOTE_NOT_ALLOWED',
+              message: 'Self-voting is not permitted. You cannot assign a score to yourself.'
+            };
+          }
+          if (matchedNominee.excludedVoterIds && matchedNominee.excludedVoterIds.includes(voter.personId)) {
+            return {
+              success: false,
+              code: 'VOTER_RESTRICTED_FOR_NOMINEE',
+              message: `You are restricted from voting for or scoring ${matchedNominee.displayName} due to governance recusal or conflict of interest rules.`
+            };
+          }
+          if (typeof score !== 'number' || isNaN(score) || score < minScore || score > maxScore) {
+            return {
+              success: false,
+              code: 'INVALID_SCORE',
+              message: `Rating scores must be between ${minScore} (lowest) and ${maxScore} (highest). Found invalid score: ${score}.`
+            };
+          }
+          calculatedTotalScore += score;
+        }
+
+        recordedScores = candidateScores;
+        recordedNomineeId = scoreEntries[0]?.[0];
+      } else {
+        // --- SINGLE-CHOICE BALLOT ---
+        if (!singleNomineeId) {
+          return { success: false, code: 'NOMINEE_NOT_FOUND', message: 'Please select a nominee to vote for.' };
+        }
+
+        const nomineeSnap = await transaction.get(doc(db, 'votingExercises', exerciseId, 'nominees', singleNomineeId));
+        if (!nomineeSnap.exists()) {
+          return { success: false, code: 'NOMINEE_NOT_FOUND', message: 'Selected nominee was not found.' };
+        }
+        const nominee = nomineeSnap.data() as Nominee;
+        if (nominee.active === false) {
+          return { success: false, code: 'INVALID_NOMINEE', message: 'The selected nominee is currently inactive.' };
+        }
+
+        // Validate Self-Voting rule
+        if (!exercise.allowSelfVote && nominee.personId && nominee.personId === voter.personId) {
+          return { success: false, code: 'SELF_VOTE_NOT_ALLOWED', message: 'Self-voting is not permitted for this exercise.' };
+        }
+
+        // Validate Nominee-Specific Voter Restriction rule
+        if (nominee.excludedVoterIds && nominee.excludedVoterIds.includes(voter.personId)) {
+          return {
+            success: false,
+            code: 'VOTER_RESTRICTED_FOR_NOMINEE',
+            message: `You are restricted from voting for ${nominee.displayName} due to governance recusal or conflict of interest rules.`
+          };
+        }
+
+        recordedNomineeId = singleNomineeId;
       }
 
       // 6. Generate anonymous receipt hash
@@ -2905,12 +3110,14 @@ export async function submitVote(
       const voteData: Vote = {
         id: voteRef.id,
         votingExerciseId: exerciseId,
-        nomineeId: nomineeId,
+        nomineeId: recordedNomineeId,
         voterId: voter.personId,
+        scores: recordedScores,
+        totalScore: recordedScores ? calculatedTotalScore : undefined,
         timestamp: nowISO,
         receiptHash
       };
-      transaction.set(voteRef, voteData);
+      transaction.set(voteRef, cleanFirestoreData(voteData));
 
       // 8. Update Voter Eligibility record to hasVoted: true
       transaction.update(eligRef, {
@@ -2928,7 +3135,9 @@ export async function submitVote(
       return {
         success: true,
         code: 'VOTE_SUCCESS',
-        message: 'Your vote was successfully recorded. Thank you for participating!',
+        message: isRatingScale
+          ? 'Your evaluation ballot has been successfully recorded. Thank you for participating!'
+          : 'Your vote was successfully recorded. Thank you for participating!',
         receiptHash,
         timestamp: nowISO
       };
@@ -2945,7 +3154,7 @@ export async function submitVote(
         'Submitted Vote',
         'vote',
         exerciseId,
-        `Voter cast vote for nominee in exercise ${exerciseId} with receipt ${result.receiptHash}`
+        `Voter cast ballot in exercise ${exerciseId} with receipt ${result.receiptHash}`
       );
     }
 
@@ -2958,6 +3167,14 @@ export async function submitVote(
       message: error.message || 'An unexpected error occurred while processing your vote. Please try again.'
     };
   }
+}
+
+export async function submitScoreBallot(
+  exerciseId: string,
+  scores: Record<string, number>,
+  voter: { personId: string; voterName: string; voterCode?: string; voterEmail?: string }
+): Promise<VoteSubmissionResult> {
+  return submitVote(exerciseId, scores, voter, { scores });
 }
 
 // ==========================================
@@ -3015,19 +3232,35 @@ export async function getVotingResults(exerciseId: string, forceRefresh = false)
 
       const totalEligible = eligList.length;
       const totalVotes = votesSnap.size;
+      const isRatingScale = exercise.votingMode === 'rating_scale';
 
-      // Count votes per nominee
+      // Count votes & scores per nominee
       const voteCounts: Record<string, number> = {};
+      const nomineeScoreTotals: Record<string, number> = {};
+      const nomineeRatingsCount: Record<string, number> = {};
+
       nominees.forEach(n => {
         voteCounts[n.id] = 0;
+        nomineeScoreTotals[n.id] = 0;
+        nomineeRatingsCount[n.id] = 0;
       });
 
       votesSnap.docs.forEach(doc => {
         const v = doc.data() as Vote;
-        if (voteCounts[v.nomineeId] !== undefined) {
-          voteCounts[v.nomineeId]++;
-        } else {
-          voteCounts[v.nomineeId] = 1;
+        if (v.scores && typeof v.scores === 'object') {
+          Object.entries(v.scores).forEach(([nomId, score]) => {
+            if (typeof score === 'number') {
+              nomineeScoreTotals[nomId] = (nomineeScoreTotals[nomId] || 0) + score;
+              nomineeRatingsCount[nomId] = (nomineeRatingsCount[nomId] || 0) + 1;
+            }
+          });
+        }
+        if (v.nomineeId) {
+          if (voteCounts[v.nomineeId] !== undefined) {
+            voteCounts[v.nomineeId]++;
+          } else {
+            voteCounts[v.nomineeId] = 1;
+          }
         }
       });
 
@@ -3048,12 +3281,37 @@ export async function getVotingResults(exerciseId: string, forceRefresh = false)
       }
 
       const nomineeResults: NomineeResult[] = nominees.map(n => {
-        const count = voteCounts[n.id] || 0;
-        const pct = totalVotes > 0 ? Number(((count / totalVotes) * 100).toFixed(1)) : 0;
         let resolvedPhoto = n.photoUrl;
         if (!resolvedPhoto && n.personId && peoplePhotoMap) {
           resolvedPhoto = peoplePhotoMap.get(n.personId);
         }
+
+        if (isRatingScale) {
+          const totScore = nomineeScoreTotals[n.id] || 0;
+          const rCount = nomineeRatingsCount[n.id] || 0;
+          const avgScore = rCount > 0 ? Number((totScore / rCount).toFixed(2)) : 0;
+          const maxScore = exercise.maxScore || 10;
+          const maxPossible = rCount * maxScore;
+          const pct = maxPossible > 0 ? Number(((totScore / maxPossible) * 100).toFixed(1)) : 0;
+
+          return {
+            nomineeId: n.id,
+            displayName: n.displayName,
+            photoUrl: resolvedPhoto || undefined,
+            roleOrTitle: n.roleOrTitle,
+            department: n.department,
+            voteCount: totScore, // total score points for bar charts and universal metrics
+            percentage: pct,
+            totalScore: totScore,
+            averageScore: avgScore,
+            ratingsCount: rCount,
+            ratingCount: rCount,
+            scoreOver100: pct
+          };
+        }
+
+        const count = voteCounts[n.id] || 0;
+        const pct = totalVotes > 0 ? Number(((count / totalVotes) * 100).toFixed(1)) : 0;
         return {
           nomineeId: n.id,
           displayName: n.displayName,
@@ -3065,17 +3323,27 @@ export async function getVotingResults(exerciseId: string, forceRefresh = false)
         };
       });
 
-      // Sort by vote count descending
-      nomineeResults.sort((a, b) => b.voteCount - a.voteCount);
+      // Sort by score or vote count descending
+      nomineeResults.sort((a, b) => {
+        if (isRatingScale) {
+          return (b.totalScore ?? b.voteCount) - (a.totalScore ?? a.voteCount);
+        }
+        return b.voteCount - a.voteCount;
+      });
 
       // Identify winners & ties
       let winners: NomineeResult[] = [];
       let isTie = false;
 
       if (totalVotes > 0 && nomineeResults.length > 0) {
-        const topVotes = nomineeResults[0].voteCount;
-        if (topVotes > 0) {
-          winners = nomineeResults.filter(n => n.voteCount === topVotes);
+        const topMetric = isRatingScale
+          ? (nomineeResults[0].totalScore ?? nomineeResults[0].voteCount)
+          : nomineeResults[0].voteCount;
+
+        if (topMetric > 0) {
+          winners = nomineeResults.filter(n =>
+            (isRatingScale ? (n.totalScore ?? n.voteCount) : n.voteCount) === topMetric
+          );
           isTie = winners.length > 1;
         }
       }
@@ -3211,15 +3479,15 @@ export async function getAllPreviousWinners(forceRefresh = false): Promise<Winne
             voteCount: number;
             percentage: number;
           }> = [
-            {
-              nomineeId: `legacy-${lw.id}-1`,
-              displayName: lw.name,
-              photoUrl: lw.photoUrl,
-              roleOrTitle: lw.roleOrTitle || (lw.departmentName ? `${lw.departmentName} Contributor` : undefined),
-              voteCount: lw.votesCount || 0,
-              percentage: isJoint ? 50 : 100
-            }
-          ];
+              {
+                nomineeId: `legacy-${lw.id}-1`,
+                displayName: lw.name,
+                photoUrl: lw.photoUrl,
+                roleOrTitle: lw.roleOrTitle || (lw.departmentName ? `${lw.departmentName} Contributor` : undefined),
+                voteCount: lw.votesCount || 0,
+                percentage: isJoint ? 50 : 100
+              }
+            ];
 
           if (lw.jointWinnerName && lw.jointWinnerName.trim()) {
             winnersList.push({
@@ -3588,7 +3856,7 @@ export async function getAuditLogs(limitCount = 100, forceRefresh = false): Prom
       // Fallback if index missing
       snap = await getDocs(query(logsRef, limit(limitCount * 2)));
     }
-    const logs = snap.docs.map(d => ({ id: d.id, ...d.data() } as AuditLog));
+    const logs = snap.docs.map(d => ({ ...d.data(), id: d.id } as AuditLog));
     logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const res = logs.slice(0, limitCount);
     dbCache.set(cacheKey, res, 600000); // 10 mins TTL
@@ -3613,9 +3881,9 @@ export async function wipeNonSuperAdminAuditTrails(
     for (const d of snap.docs) {
       const data = d.data() as AuditLog;
       // Keep only logs explicitly made by super_admin
-      const isSuperAdminLog = data.actorRole === 'super_admin' || 
-                             (data.actorName || '').toLowerCase().includes('super admin') ||
-                             (data.actorEmail || '').toLowerCase().includes('superadmin');
+      const isSuperAdminLog = data.actorRole === 'super_admin' ||
+        (data.actorName || '').toLowerCase().includes('super admin') ||
+        (data.actorEmail || '').toLowerCase().includes('superadmin');
       if (!isSuperAdminLog) {
         await deleteDoc(doc(db, 'auditLogs', d.id));
         purgedLogs++;
@@ -3663,11 +3931,11 @@ export async function purgeMockOrganisationsAndAuditTrails(
     for (const d of orgsSnap.docs) {
       const orgData = d.data() as Organisation;
       const isMockOrg = mockSlugs.includes(orgData.slug) ||
-                        orgData.createdBy === 'system_seeder' ||
-                        orgData.name.includes('Sanctuary') ||
-                        orgData.name.includes('Music & Worship') ||
-                        orgData.name.includes('Media & Tech') ||
-                        orgData.name.includes('Protocol & Hospitality');
+        orgData.createdBy === 'system_seeder' ||
+        orgData.name.includes('Sanctuary') ||
+        orgData.name.includes('Music & Worship') ||
+        orgData.name.includes('Media & Tech') ||
+        orgData.name.includes('Protocol & Hospitality');
       if (isMockOrg) {
         deletedOrgIds.push(d.id);
         await deleteDoc(doc(db, 'organisations', d.id));
@@ -3701,7 +3969,10 @@ export async function purgeMockOrganisationsAndAuditTrails(
       const exercisesSnap = await getDocs(exercisesRef);
       for (const d of exercisesSnap.docs) {
         const exData = d.data() as VotingExercise;
-        if (deletedOrgIds.includes(exData.organisationId) || exData.createdBy === 'system_seeder') {
+        if (
+          (exData.organisationId && deletedOrgIds.includes(exData.organisationId)) ||
+          exData.createdBy === 'system_seeder'
+        ) {
           await deleteDoc(doc(db, 'votingExercises', d.id));
         }
       }
@@ -3894,14 +4165,7 @@ export async function seedSampleChurchData(providedActor?: { id: string; name: s
     votingMode: 'single_choice',
     voterSelectionMode: 'all_workforce',
     nomineeSelectionMode: 'manual_selection',
-    criteria: [
-      { title: 'Consistency and Commitment', description: 'Faithful presence and steadfast devotion across all service units.', order: 1 },
-      { title: 'Attendance and Punctuality', description: 'Consistently arrives early and prepared for all church activities and team duties.', order: 2 },
-      { title: 'Excellence in Service', description: 'High quality of execution, diligence, and reverence in the house of God.', order: 3 },
-      { title: 'Leadership and Initiative', description: 'Proactively identifies needs, inspires others, and solves problems gracefully.', order: 4 },
-      { title: 'Teamwork and Collaboration', description: 'Humble, uplifting, and cooperative spirit with fellow workers and leadership.', order: 5 },
-      { title: 'Overall Kingdom Impact', description: 'Significant contribution to the growth, order, and spiritual atmosphere of the church.', order: 6 }
-    ],
+    criteria: CORE_VOTING_CRITERIA,
     nominees: [
       {
         displayName: 'Sister Mary Johnson',
@@ -3966,12 +4230,7 @@ export async function seedSampleChurchData(providedActor?: { id: string; name: s
     resultsPublished: true,
     allowSelfVote: false,
     votingMode: 'single_choice',
-    criteria: [
-      { title: 'Consistent Sunday & Midweek Attendance', description: 'Faithful arrival and presence across all services.', order: 1 },
-      { title: 'Punctuality & Early Setup', description: 'Arriving at least 45 minutes prior to service kick-off.', order: 2 },
-      { title: 'Commitment & Cleanliness Excellence', description: 'Thorough care of altar, seats, and sanctuary aesthetics.', order: 3 },
-      { title: 'Teamwork & Uplifting Attitude', description: 'Supportive, humble spirit when collaborating with teammates.', order: 4 }
-    ],
+    criteria: CORE_VOTING_CRITERIA,
     nominees: [
       {
         displayName: 'Sister Mary Johnson',
@@ -4025,11 +4284,7 @@ export async function seedSampleChurchData(providedActor?: { id: string; name: s
     resultsPublished: false,
     allowSelfVote: false,
     votingMode: 'single_choice',
-    criteria: [
-      { title: 'Vocal Discipline & Rehearsal Attendance', description: 'Never missing Saturday choir rehearsals.', order: 1 },
-      { title: 'Spiritual Demeanour & Stage Conduct', description: 'Flowing with the Spirit during altar calls and worship.', order: 2 },
-      { title: 'Team Harmony & Repertoire Readiness', description: 'Mastery of assigned voice parts and harmonies.', order: 3 }
-    ],
+    criteria: CORE_VOTING_CRITERIA,
     nominees: [
       {
         displayName: 'Sister Grace Okon',
@@ -4072,11 +4327,7 @@ export async function seedSampleChurchData(providedActor?: { id: string; name: s
     resultsPublished: true,
     allowSelfVote: true,
     votingMode: 'single_choice',
-    criteria: [
-      { title: 'Technical Precision & Multi-cam Direction', description: 'Zero lag switching and clean broadcast composition.', order: 1 },
-      { title: 'Quick Troubleshooting under Pressure', description: 'Rapid resolution of audio/video feedback loops.', order: 2 },
-      { title: 'Servant Leadership & Equipment Care', description: 'Proper storage of 4K cameras, lenses, and SDI cables.', order: 3 }
-    ],
+    criteria: CORE_VOTING_CRITERIA,
     nominees: [
       {
         displayName: 'Brother Emmanuel Vance',
@@ -4123,10 +4374,7 @@ export async function seedSampleChurchData(providedActor?: { id: string; name: s
     allowSelfVote: false,
     votingMode: 'single_choice',
     voterSelectionMode: 'scope_members',
-    criteria: [
-      { title: 'Altar Reverence & Cleanliness', description: 'Immaculate preparation of pulpit, communion vessels, and stage carpets.', order: 1 },
-      { title: 'Early Morning Readiness', description: 'Arriving before 6:30 AM on prayer & communion service days.', order: 2 }
-    ],
+    criteria: CORE_VOTING_CRITERIA,
     nominees: [
       {
         displayName: 'Sister Mary Johnson',
@@ -4168,11 +4416,7 @@ export async function seedSampleChurchData(providedActor?: { id: string; name: s
     allowSelfVote: false,
     votingMode: 'single_choice',
     voterSelectionMode: 'all_church',
-    criteria: [
-      { title: 'Christian Character & Testimony', description: 'Exemplifying Christ-like love, integrity, and humility in daily conduct.', order: 1 },
-      { title: 'Community Outreach & Care', description: 'Active compassion, visitation of the sick, and support for church families.', order: 2 },
-      { title: 'Faithful Fellowship & Discipleship', description: 'Regular participation in house fellowship and spiritual mentorship.', order: 3 }
-    ],
+    criteria: CORE_VOTING_CRITERIA,
     nominees: [
       {
         displayName: 'Sister Grace Okon',
@@ -4213,10 +4457,7 @@ export async function seedSampleChurchData(providedActor?: { id: string; name: s
     allowSelfVote: false,
     votingMode: 'single_choice',
     voterSelectionMode: 'manual_selection',
-    criteria: [
-      { title: 'Vision Alignment & Stewardship', description: 'Executing ministerial mandates with spiritual foresight and diligence.', order: 1 },
-      { title: 'Mentorship & Succession Building', description: 'Empowering junior workers and establishing thriving department systems.', order: 2 }
-    ],
+    criteria: CORE_VOTING_CRITERIA,
     nominees: [
       {
         displayName: 'Minister Samuel Adeleke',
@@ -4296,7 +4537,7 @@ export async function ensureOfficialAccounts(): Promise<UserAccount[]> {
   try {
     const usersRef = collection(db, 'users');
     const snap = await getDocs(usersRef);
-    const existingUsers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserAccount));
+    const existingUsers = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as UserAccount));
     const now = new Date().toISOString();
 
     // Only bootstrap initial default accounts if no users exist at all
@@ -4357,7 +4598,7 @@ export async function getUserAccounts(forceRefresh = false): Promise<UserAccount
   try {
     const usersRef = collection(db, 'users');
     const snap = await getDocs(usersRef);
-    let users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserAccount));
+    let users = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as UserAccount));
 
     // If completely empty, bootstrap initial accounts once
     if (users.length === 0) {
@@ -4426,10 +4667,10 @@ export async function createUserAccount(
   const usersRef = collection(db, 'users');
   const docRef = doc(usersRef);
   const now = new Date().toISOString();
-  
+
   // Clean username - preserving original casing and spaces/characters
   const cleanUsername = data.username.trim();
-  
+
   // Check unique username (case-insensitive)
   const existing = await getUserAccountByUsername(cleanUsername);
   if (existing) {
@@ -4468,7 +4709,7 @@ export async function updateUserAccount(
 ): Promise<void> {
   const docRef = doc(db, 'users', id);
   const now = new Date().toISOString();
-  
+
   if (data.username) {
     const cleanUsername = data.username.trim();
     const existing = await getUserAccountByUsername(cleanUsername);
@@ -4532,8 +4773,8 @@ export async function verifyAdminCredentials(
 
     // 1. Direct match by username or fullName (case-insensitive)
     let matchedUser = allUsers.find(
-      u => u.username?.trim().toLowerCase() === cleanUsername || 
-           u.fullName?.trim().toLowerCase() === cleanUsername
+      u => u.username?.trim().toLowerCase() === cleanUsername ||
+        u.fullName?.trim().toLowerCase() === cleanUsername
     );
 
     // 2. Fallback: if username matches default super admin title or "superadmin", allow matching active super_admin

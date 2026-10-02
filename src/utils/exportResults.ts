@@ -15,6 +15,8 @@ export function exportVotingResultsCSV(
   const eligible = eligibleCount !== undefined ? eligibleCount : results.totalEligible;
   const participation = eligible > 0 ? ((results.totalVotes / eligible) * 100).toFixed(1) : '0';
 
+  const isRatingScale = exercise.votingMode === 'rating_scale';
+
   const rows: string[][] = [
     ['TRH MINISTRIES GLOBAL - OFFICIAL RECOGNITION & VOTING RECORD'],
     ['Generated At', new Date().toLocaleString()],
@@ -24,6 +26,7 @@ export function exportVotingResultsCSV(
     ['Category', `"${(exercise.categoryName || 'Recognition').replace(/"/g, '""')}"`],
     ['Organisation', `"${(exercise.organisationName || '').replace(/"/g, '""')}"`],
     ['Department / Team', `"${(exercise.departmentName || 'All Departments').replace(/"/g, '""')}"`],
+    ['Voting Model', isRatingScale ? `Workforce Nominee Rating Scale (${exercise.minScore || 5}–${exercise.maxScore || 10} pts)` : 'Standard Ballot (Single Choice)'],
     ['Current Status', exercise.status.toUpperCase()],
     ['Voting Window Start', new Date(exercise.startTime).toLocaleString()],
     ['Voting Window End', new Date(exercise.endTime).toLocaleString()],
@@ -36,23 +39,43 @@ export function exportVotingResultsCSV(
     ['Outcome Status', results.isTie ? 'TIE BETWEEN TOP NOMINEES' : 'DECISIVE WINNER DETERMINED'],
     [''],
     ['--- CERTIFIED NOMINEE VOTE TALLIES ---'],
-    ['Rank', 'Nominee Full Name', 'Role / Department', 'Votes Received', 'Vote Percentage (%)', 'Outcome Status']
+    isRatingScale
+      ? ['Rank', 'Nominee Full Name', 'Role / Department', 'Total Score Points', 'Score (Over 100%)', 'Average Rating', 'Evaluations Count', 'Outcome Status']
+      : ['Rank', 'Nominee Full Name', 'Role / Department', 'Votes Received', 'Vote Percentage (%)', 'Outcome Status']
   ];
 
-  // Sort nominees descending by votes
-  const sortedNominees = [...(results.nomineeResults || [])].sort((a, b) => b.voteCount - a.voteCount);
+  // Sort nominees descending by score or votes
+  const sortedNominees = [...(results.nomineeResults || [])].sort((a, b) => {
+    if (isRatingScale) {
+      return (b.totalScore ?? b.voteCount) - (a.totalScore ?? a.voteCount);
+    }
+    return b.voteCount - a.voteCount;
+  });
 
   sortedNominees.forEach((nom, index) => {
     const isWinner = results.winners.some((w) => w.nomineeId === nom.nomineeId);
     const statusLabel = isWinner ? (results.isTie ? 'Joint Winner (Tie)' : 'Winner (1st Place)') : 'Nominee';
-    rows.push([
-      `${index + 1}`,
-      `"${nom.displayName.replace(/"/g, '""')}"`,
-      `"${(nom.roleOrTitle || nom.department || 'Nominee').replace(/"/g, '""')}"`,
-      `${nom.voteCount}`,
-      `${nom.percentage}%`,
-      `"${statusLabel}"`
-    ]);
+    if (isRatingScale) {
+      rows.push([
+        `${index + 1}`,
+        `"${nom.displayName.replace(/"/g, '""')}"`,
+        `"${(nom.roleOrTitle || nom.department || 'Nominee').replace(/"/g, '""')}"`,
+        `${nom.totalScore ?? nom.voteCount}`,
+        `${nom.scoreOver100 ?? nom.percentage}%`,
+        `${nom.averageScore ?? 0} / ${exercise.maxScore || 10}`,
+        `${nom.ratingsCount ?? results.totalVotes}`,
+        `"${statusLabel}"`
+      ]);
+    } else {
+      rows.push([
+        `${index + 1}`,
+        `"${nom.displayName.replace(/"/g, '""')}"`,
+        `"${(nom.roleOrTitle || nom.department || 'Nominee').replace(/"/g, '""')}"`,
+        `${nom.voteCount}`,
+        `${nom.percentage}%`,
+        `"${statusLabel}"`
+      ]);
+    }
   });
 
   rows.push(['']);
@@ -93,6 +116,7 @@ export async function exportVotingResultsPDF(
   const accentColor = [255, 138, 0]; // Flame Orange #FF8A00
   const darkTextColor = [15, 23, 42]; // Slate 900
   const slateTextColor = [100, 116, 139]; // Slate 500
+  const isRatingScale = exercise.votingMode === 'rating_scale';
 
   // 1. Header Banner
   doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
@@ -190,7 +214,13 @@ export async function exportVotingResultsPDF(
 
     doc.setTextColor(darkTextColor[0], darkTextColor[1], darkTextColor[2]);
     doc.setFontSize(11);
-    const winnerNames = results.winners.map((w) => `${w.displayName} (${w.voteCount} votes - ${w.percentage}%)`).join(', ');
+    const winnerNames = results.winners
+      .map((w) =>
+        isRatingScale
+          ? `${w.displayName} (Score Over 100%: ${w.scoreOver100 ?? w.percentage}% • ${w.totalScore ?? w.voteCount} pts)`
+          : `${w.displayName} (${w.voteCount} votes - ${w.percentage}%)`
+      )
+      .join(', ');
     doc.text(winnerNames, 22, y + 15);
 
     y += 28;
@@ -200,13 +230,32 @@ export async function exportVotingResultsPDF(
   doc.setTextColor(darkTextColor[0], darkTextColor[1], darkTextColor[2]);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('Certified Nominee Vote Tallies', 14, y);
+  doc.text(isRatingScale ? 'Certified Workforce Nominee Rating Standings' : 'Certified Nominee Vote Tallies', 14, y);
   y += 4;
 
-  const sortedNominees = [...(results.nomineeResults || [])].sort((a, b) => b.voteCount - a.voteCount);
+  const sortedNominees = [...(results.nomineeResults || [])].sort((a, b) => {
+    if (isRatingScale) return (b.totalScore ?? b.voteCount) - (a.totalScore ?? a.voteCount);
+    return b.voteCount - a.voteCount;
+  });
+
+  const tableHead = isRatingScale
+    ? [['Rank', 'Nominee Name', 'Role / Department', 'Total Points', 'Score (Over 100%)', 'Avg Rating', 'Official Status']]
+    : [['Rank', 'Nominee Name', 'Role / Department', 'Votes Received', 'Vote Share', 'Official Status']];
+
   const tableData = sortedNominees.map((nom, idx) => {
     const isWinner = results.winners.some((w) => w.nomineeId === nom.nomineeId);
     const statusText = isWinner ? (results.isTie ? 'Tie (1st Place)' : 'Winner (1st Place)') : 'Nominee';
+    if (isRatingScale) {
+      return [
+        `#${idx + 1}`,
+        nom.displayName,
+        nom.roleOrTitle || nom.department || '—',
+        (nom.totalScore ?? nom.voteCount).toString(),
+        `${nom.scoreOver100 ?? nom.percentage}%`,
+        `${nom.averageScore ?? 0} / ${exercise.maxScore || 10}`,
+        statusText
+      ];
+    }
     return [
       `#${idx + 1}`,
       nom.displayName,
@@ -219,7 +268,7 @@ export async function exportVotingResultsPDF(
 
   autoTable(doc, {
     startY: y,
-    head: [['Rank', 'Nominee Name', 'Role / Department', 'Votes Received', 'Vote Share', 'Official Status']],
+    head: tableHead,
     body: tableData,
     theme: 'striped',
     headStyles: {

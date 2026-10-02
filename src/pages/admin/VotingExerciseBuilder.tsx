@@ -104,6 +104,8 @@ export const VotingExerciseBuilder: React.FC<VotingExerciseBuilderProps> = ({
       photoUrl: string;
       bio: string;
       personId?: string;
+      excludedVoterIds?: string[];
+      exclusionReason?: string;
     }>
   >([]);
   const [nomineeSearchQuery, setNomineeSearchQuery] = useState('');
@@ -118,17 +120,23 @@ export const VotingExerciseBuilder: React.FC<VotingExerciseBuilderProps> = ({
 
   // STEP 5: Voting Criteria
   const [criteria, setCriteria] = useState<Array<{ id: string; title: string; description: string; active: boolean }>>([
-    { id: '1', title: 'Consistency and Commitment', description: 'Faithful presence and steadfast devotion to assigned service responsibilities.', active: true },
-    { id: '2', title: 'Attendance and Punctuality', description: 'Consistently arrives early and prepared for all church activities and team duties.', active: true },
-    { id: '3', title: 'Excellence in Service', description: 'High quality of execution, diligence, and reverence in the house of God.', active: true },
-    { id: '4', title: 'Leadership and Initiative', description: 'Proactively identifies needs, inspires others, and solves problems gracefully.', active: true },
-    { id: '5', title: 'Teamwork and Collaboration', description: 'Humble, uplifting, and cooperative spirit with fellow workers and leadership.', active: true },
-    { id: '6', title: 'Overall Kingdom Impact', description: 'Significant contribution to the growth, order, and spiritual atmosphere of the church.', active: true }
+    { id: '1', title: 'Honour', description: 'Faithful reverence, godly respect for leaders and brethren, humility, and sacred esteem for kingdom principles and church culture.', active: true },
+    { id: '2', title: 'Excellence', description: 'High quality of execution, diligence, spiritual reverence, and extraordinary standards in all kingdom duties in the house of God.', active: true },
+    { id: '3', title: 'Accountability', description: 'Integrity, transparency, dependability, punctuality, and faithful stewardship of assigned duties, time, and church resources.', active: true },
+    { id: '4', title: 'Results', description: 'Fruitfulness, measurable outcomes, kingdom impact, and steadfast completion of ministerial objectives and targets.', active: true },
+    { id: '5', title: 'Transforming Love', description: 'Christlike compassion, selfless service, empathy, mutual support, emotional maturity, and unconditional care within the workforce.', active: true },
+    { id: '6', title: 'Innovation', description: 'Forward-thinking creativity, proactive problem-solving, inspired solutions, and progressive excellence to advance church operations.', active: true }
   ]);
   const [newCritTitle, setNewCritTitle] = useState('');
   const [newCritDesc, setNewCritDesc] = useState('');
 
   // STEP 6: Voting Rules
+  const [votingMode, setVotingMode] = useState<'single_choice' | 'rating_scale'>('single_choice');
+  const [minScore, setMinScore] = useState<number>(5);
+  const [maxScore, setMaxScore] = useState<number>(10);
+  const [scoringDescription, setScoringDescription] = useState<string>(
+    'Score each eligible nominee from 5 (lowest) to 10 (highest). Nominees cannot rate themselves.'
+  );
   const [allowSelfVote, setAllowSelfVote] = useState(false);
   const [maxVotesPerPerson, setMaxVotesPerPerson] = useState(1);
 
@@ -585,9 +593,12 @@ export const VotingExerciseBuilder: React.FC<VotingExerciseBuilderProps> = ({
           endTime: new Date(endTime).toISOString(),
           resultsPublished: false,
           resultsVisibilityMode,
-          allowSelfVote,
+          allowSelfVote: votingMode === 'rating_scale' ? false : allowSelfVote,
           maxVotesPerPerson,
-          votingMode: 'single_choice',
+          votingMode,
+          minScore: votingMode === 'rating_scale' ? minScore : undefined,
+          maxScore: votingMode === 'rating_scale' ? maxScore : undefined,
+          scoringDescription: votingMode === 'rating_scale' ? scoringDescription : undefined,
           voterSelectionMode,
           nomineeSelectionMode,
           eligibleVotersCount: votersToAssign.length,
@@ -604,6 +615,8 @@ export const VotingExerciseBuilder: React.FC<VotingExerciseBuilderProps> = ({
             photoUrl: n.photoUrl,
             bio: n.bio,
             personId: n.personId,
+            excludedVoterIds: n.excludedVoterIds,
+            exclusionReason: n.exclusionReason,
             order: idx + 1
           }))
         },
@@ -1732,8 +1745,129 @@ export const VotingExerciseBuilder: React.FC<VotingExerciseBuilderProps> = ({
         {step === 6 && (
           <div className="space-y-6">
             <div className="border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-semibold text-white">Step 6 — Voting Rules</h3>
-              <p className="text-xs text-slate-400">Configure voting integrity constraints and self-voting rules.</p>
+              <h3 className="text-lg font-semibold text-white">Step 6 — Voting Model & Rules</h3>
+              <p className="text-xs text-slate-400">Choose the ballot evaluation format, scoring parameters, and self-voting integrity rules.</p>
+            </div>
+
+            {/* Voting Mode Selection Cards */}
+            <div className="space-y-3">
+              <label className="block text-xs font-medium text-slate-300 uppercase tracking-wider">
+                Voting & Evaluation Model *
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Standard Single Choice */}
+                <div
+                  onClick={() => setVotingMode('single_choice')}
+                  className={`p-4 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
+                    votingMode === 'single_choice'
+                      ? 'bg-[#FF8A00]/10 border-[#FF8A00] ring-2 ring-[#FF8A00]/20'
+                      : 'bg-slate-900 border-slate-700 hover:border-slate-600'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Vote className={`w-5 h-5 ${votingMode === 'single_choice' ? 'text-[#FF8A00]' : 'text-slate-400'}`} />
+                      {votingMode === 'single_choice' && <CheckCircle2 className="w-4 h-4 text-[#FF8A00]" />}
+                    </div>
+                    <h4 className="text-sm font-semibold text-white">Standard Ballot (Single Choice)</h4>
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                      Standard election ballot. Each elector votes for one candidate. Winner is the candidate with the highest total votes.
+                    </p>
+                  </div>
+                  <div className="mt-3 text-[11px] font-mono text-[#FF8A00]">
+                    1 Choice per Ballot • Simple Majority
+                  </div>
+                </div>
+
+                {/* Workforce Nominee Rating Scale */}
+                <div
+                  onClick={() => {
+                    setVotingMode('rating_scale');
+                    setAllowSelfVote(false); // Automatically lock self-voting out
+                  }}
+                  className={`p-4 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
+                    votingMode === 'rating_scale'
+                      ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20'
+                      : 'bg-slate-900 border-slate-700 hover:border-slate-600'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Sparkles className={`w-5 h-5 ${votingMode === 'rating_scale' ? 'text-amber-400' : 'text-slate-400'}`} />
+                      {votingMode === 'rating_scale' && <CheckCircle2 className="w-4 h-4 text-amber-400" />}
+                    </div>
+                    <h4 className="text-sm font-semibold text-white">Nominee Rating Scale (5 to 10 Points)</h4>
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                      Nominated members cannot vote for themselves, but eligible members evaluate and score other nominees with 5 (lowest) to 10 (highest).
+                    </p>
+                  </div>
+                  <div className="mt-3 text-[11px] font-mono text-amber-400">
+                    Scale 5–10 pts • Nominees Barred from Self-Vote
+                  </div>
+                </div>
+              </div>
+
+              {/* Rating Scale Parameters Configuration */}
+              {votingMode === 'rating_scale' && (
+                <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 space-y-4">
+                  <div className="flex items-center gap-2 font-bold text-amber-300 text-xs">
+                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Workforce Rating Scale Parameters</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                        Lowest Rating Score Per Nominee
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={maxScore - 1}
+                        value={minScore}
+                        onChange={(e) => setMinScore(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">Default is 5 as the lowest possible score per candidate.</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                        Highest Rating Score Per Nominee
+                      </label>
+                      <input
+                        type="number"
+                        min={minScore + 1}
+                        max={100}
+                        value={maxScore}
+                        onChange={(e) => setMaxScore(Math.max(minScore + 1, parseInt(e.target.value) || 10))}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">Default is 10 as the highest possible score per candidate.</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                      Guidance Note for Voters
+                    </label>
+                    <input
+                      type="text"
+                      value={scoringDescription}
+                      onChange={(e) => setScoringDescription(e.target.value)}
+                      placeholder="e.g. Rate each nominee from 5 (lowest) to 10 (highest). Nominees cannot rate themselves."
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>
+                      <strong>Integrity Guarantee:</strong> If a voter is among the nominated candidates, they are prohibited from voting or scoring themselves. They will only be permitted to score their fellow nominees.
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1744,24 +1878,33 @@ export const VotingExerciseBuilder: React.FC<VotingExerciseBuilderProps> = ({
                     <Shield className="w-5 h-5 text-[#FF8A00]" />
                     <span
                       className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase ${
-                        allowSelfVote
+                        votingMode === 'rating_scale'
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          : allowSelfVote
                           ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                           : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                       }`}
                     >
-                      {allowSelfVote ? 'Self-Voting Allowed' : 'Self-Voting Blocked'}
+                      {votingMode === 'rating_scale'
+                        ? 'Self-Vote Blocked (Enforced)'
+                        : allowSelfVote
+                        ? 'Self-Voting Allowed'
+                        : 'Self-Voting Blocked'}
                     </span>
                   </div>
                   <h4 className="text-sm font-semibold text-white">Allow Self-Voting?</h4>
                   <p className="text-xs text-slate-400 mt-1">
-                    When disabled, nominees cannot vote for themselves. The system matches person IDs during vote submission.
+                    {votingMode === 'rating_scale'
+                      ? 'In nominee rating mode, candidates cannot vote for themselves by definition.'
+                      : 'When disabled, nominees cannot vote for themselves. The system matches person IDs during vote submission.'}
                   </p>
                 </div>
                 <div className="mt-4 flex gap-2">
                   <button
+                    disabled={votingMode === 'rating_scale'}
                     onClick={() => setAllowSelfVote(false)}
                     className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${
-                      !allowSelfVote
+                      !allowSelfVote || votingMode === 'rating_scale'
                         ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
                         : 'bg-slate-800 border-slate-700 text-slate-400'
                     }`}
@@ -1769,11 +1912,12 @@ export const VotingExerciseBuilder: React.FC<VotingExerciseBuilderProps> = ({
                     No (Recommended)
                   </button>
                   <button
+                    disabled={votingMode === 'rating_scale'}
                     onClick={() => setAllowSelfVote(true)}
                     className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${
-                      allowSelfVote
+                      allowSelfVote && votingMode !== 'rating_scale'
                         ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                        : 'bg-slate-800 border-slate-700 text-slate-400'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 opacity-50 cursor-not-allowed'
                     }`}
                   >
                     Yes
@@ -1787,12 +1931,12 @@ export const VotingExerciseBuilder: React.FC<VotingExerciseBuilderProps> = ({
                   <div className="flex items-center justify-between mb-2">
                     <Vote className="w-5 h-5 text-[#FF8A00]" />
                     <span className="text-xs bg-slate-800 border border-slate-700 px-2.5 py-0.5 rounded-full text-slate-300 font-mono font-bold">
-                      1 Person = 1 Vote
+                      1 Person = 1 Ballot
                     </span>
                   </div>
-                  <h4 className="text-sm font-semibold text-white">Maximum Votes Per Person</h4>
+                  <h4 className="text-sm font-semibold text-white">Maximum Ballots Per Elector</h4>
                   <p className="text-xs text-slate-400 mt-1">
-                    Each voter can cast exactly one ballot per voting exercise. Enforced server-side via Firestore transactions.
+                    Each voter can cast exactly one official ballot per exercise. Enforced server-side via atomic Firestore transactions.
                   </p>
                 </div>
                 <div className="mt-4 p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-300">
@@ -1992,7 +2136,9 @@ export const VotingExerciseBuilder: React.FC<VotingExerciseBuilderProps> = ({
                 <div>
                   <div className="text-slate-500">Rules & Results</div>
                   <div className="text-slate-300 mt-0.5">
-                    Self-Voting: {allowSelfVote ? 'Allowed' : 'Disallowed'}
+                    Model: <strong className="text-amber-300 font-semibold">{votingMode === 'rating_scale' ? `Rating Scale (${minScore}–${maxScore} pts)` : 'Single Choice (1 vote)'}</strong>
+                    <br />
+                    Self-Voting: {votingMode === 'rating_scale' ? 'Blocked (Enforced)' : allowSelfVote ? 'Allowed' : 'Disallowed'}
                     <br />
                     Results: {resultsVisibilityMode.replace(/_/g, ' ')}
                   </div>

@@ -12,6 +12,7 @@ import { DynamicVotingPage } from './pages/voter/DynamicVotingPage';
 import { PublicResultsPage } from './pages/voter/PublicResultsPage';
 import { WinnersHallOfFame } from './pages/voter/WinnersHallOfFame';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { replaceAllActiveExerciseCriteria } from './services/db';
 
 type AppView = 'voter_portal' | 'vote_screen' | 'results_screen' | 'winners_hall_of_fame' | 'admin_dashboard';
 
@@ -88,7 +89,7 @@ const MainAppContent: React.FC = () => {
         // Fallback: parse URL parameters directly
         const parsed = parseInitialViewState();
         setCurrentView(parsed.view);
-        setSelectedExerciseId(parsed.exerciseId);
+        setSelectedExerciseId(parsed.exerciseId ?? null);
       }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -97,6 +98,26 @@ const MainAppContent: React.FC = () => {
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
+  }, []);
+
+  // One-time automatic upgrade of active exercise criteria to the 6 core criteria:
+  // Honour, Excellence, Accountability, Results, Transforming Love, and Innovation
+  useEffect(() => {
+    const key = 'trh_hearti_core_criteria_v1';
+    if (!localStorage.getItem(key)) {
+      replaceAllActiveExerciseCriteria({
+        id: 'system_core_criteria',
+        name: 'System Core Values Upgrade',
+        email: 'admin@trhministries.org'
+      })
+        .then((res) => {
+          localStorage.setItem(key, 'true');
+          console.log(`[Core Criteria] Automatically updated criteria across ${res.updatedCount} active voting exercises.`);
+        })
+        .catch((err) => {
+          console.warn('[Core Criteria Upgrade Notice]', err);
+        });
+    }
   }, []);
 
   const handleNavigate = useCallback((view: string, exerciseId?: string) => {

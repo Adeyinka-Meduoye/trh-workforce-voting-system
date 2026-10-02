@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { WinnerRecord, Organisation, Department } from '../../types';
+import { WinnerRecord, Organisation, Department, VotingScopeType } from '../../types';
 import { getAllPreviousWinners, getOrganisations, getDepartments } from '../../services/db';
 import {
   Trophy,
@@ -33,7 +33,11 @@ import {
   Download,
   Image as ImageIcon,
   Loader2,
-  Globe
+  Globe,
+  Church,
+  Briefcase,
+  Shield,
+  Tag
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -43,10 +47,93 @@ import {
   downloadAwardAsImage,
   getCertificateHallOfFameTitle,
   getAwardHallOfFameTitle,
+  resolveWinnerScope,
   TRH_LOGO_URL,
   OSCAR_STATUETTE_SVG
 } from '../../utils/printCertificate';
 import { ShareWinnerModal } from '../../components/voter/ShareWinnerModal';
+
+export const VOTING_SCOPE_FILTERS: Array<{
+  id: 'all' | VotingScopeType;
+  label: string;
+  badgeLabel: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  badgeBg: string;
+  borderClass: string;
+  activeClass: string;
+}> = [
+  {
+    id: 'all',
+    label: 'All Scopes',
+    badgeLabel: 'All Scopes',
+    icon: Globe,
+    color: 'text-amber-400',
+    badgeBg: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
+    borderClass: 'border-amber-500/30',
+    activeClass: 'bg-gradient-to-r from-amber-500 to-[#FF8A00] text-slate-950 font-bold border-transparent shadow-md'
+  },
+  {
+    id: 'church',
+    label: 'Entire Church',
+    badgeLabel: 'Entire Church',
+    icon: Church,
+    color: 'text-amber-300',
+    badgeBg: 'bg-amber-500/15 text-amber-300 border-amber-500/40',
+    borderClass: 'border-amber-500/40',
+    activeClass: 'bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 font-bold border-transparent shadow-md'
+  },
+  {
+    id: 'workforce',
+    label: 'Entire Workforce',
+    badgeLabel: 'Entire Workforce',
+    icon: Users,
+    color: 'text-purple-300',
+    badgeBg: 'bg-purple-500/15 text-purple-300 border-purple-500/40',
+    borderClass: 'border-purple-500/40',
+    activeClass: 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold border-transparent shadow-md'
+  },
+  {
+    id: 'organisation',
+    label: 'Organisation',
+    badgeLabel: 'Organisation',
+    icon: Building2,
+    color: 'text-blue-300',
+    badgeBg: 'bg-blue-500/15 text-blue-300 border-blue-500/40',
+    borderClass: 'border-blue-500/40',
+    activeClass: 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white font-bold border-transparent shadow-md'
+  },
+  {
+    id: 'department',
+    label: 'Department',
+    badgeLabel: 'Department',
+    icon: Briefcase,
+    color: 'text-emerald-300',
+    badgeBg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40',
+    borderClass: 'border-emerald-500/40',
+    activeClass: 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-bold border-transparent shadow-md'
+  },
+  {
+    id: 'unit',
+    label: 'Unit',
+    badgeLabel: 'Unit',
+    icon: Shield,
+    color: 'text-rose-300',
+    badgeBg: 'bg-rose-500/15 text-rose-300 border-rose-500/40',
+    borderClass: 'border-rose-500/40',
+    activeClass: 'bg-gradient-to-r from-rose-500 to-pink-600 text-white font-bold border-transparent shadow-md'
+  },
+  {
+    id: 'custom',
+    label: 'Custom Group',
+    badgeLabel: 'Custom Group',
+    icon: Tag,
+    color: 'text-cyan-300',
+    badgeBg: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40',
+    borderClass: 'border-cyan-500/40',
+    activeClass: 'bg-gradient-to-r from-cyan-500 to-sky-600 text-slate-950 font-bold border-transparent shadow-md'
+  }
+];
 
 interface WinnersHallOfFameProps {
   onBack: () => void;
@@ -109,6 +196,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedOrg, setSelectedOrg] = useState('all');
   const [selectedDept, setSelectedDept] = useState('all');
+  const [selectedScope, setSelectedScope] = useState<'all' | VotingScopeType>('all');
 
   useEffect(() => {
     const loadData = async (force = false) => {
@@ -170,6 +258,24 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
     return Array.from(yearsSet).sort((a, b) => Number(b) - Number(a));
   }, [winners]);
 
+  // Compute scope counts across all winners
+  const scopeCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      all: winners.length,
+      church: 0,
+      workforce: 0,
+      organisation: 0,
+      department: 0,
+      unit: 0,
+      custom: 0
+    };
+    winners.forEach((w) => {
+      const s = resolveWinnerScope(w);
+      if (counts[s] !== undefined) counts[s]++;
+    });
+    return counts;
+  }, [winners]);
+
   // Filtered winners list
   const filteredWinners = useMemo(() => {
     return winners.filter((w) => {
@@ -194,6 +300,12 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
         if (!matchesPrimary && !matchesSecondary && !matchesList) return false;
       }
 
+      // Voting Scope filter
+      if (selectedScope !== 'all') {
+        const wScope = resolveWinnerScope(w);
+        if (wScope !== selectedScope) return false;
+      }
+
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -212,6 +324,16 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
         const matchYear = String(w.year || '').includes(q);
         const matchCitation = (w.citation || '').toLowerCase().includes(q);
 
+        const wScope = resolveWinnerScope(w);
+        const matchScope =
+          wScope.includes(q) ||
+          (wScope === 'church' && 'entire church'.includes(q)) ||
+          (wScope === 'workforce' && 'entire workforce'.includes(q)) ||
+          (wScope === 'organisation' && 'organisation'.includes(q)) ||
+          (wScope === 'department' && 'department'.includes(q)) ||
+          (wScope === 'unit' && 'unit'.includes(q)) ||
+          (wScope === 'custom' && 'custom group'.includes(q));
+
         if (
           !matchName &&
           !matchJoint &&
@@ -223,14 +345,15 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
           !matchCategory &&
           !matchMonth &&
           !matchYear &&
-          !matchCitation
+          !matchCitation &&
+          !matchScope
         ) {
           return false;
         }
       }
       return true;
     });
-  }, [winners, selectedTab, selectedYear, selectedOrg, selectedDept, searchQuery]);
+  }, [winners, selectedTab, selectedYear, selectedOrg, selectedDept, selectedScope, searchQuery]);
 
   const totalHonored = winners.reduce((acc, curr) => acc + (curr.isTie ? curr.allWinners.length : 1), 0);
   const totalVotesCast = winners.reduce((acc, curr) => acc + curr.totalVotes, 0);
@@ -514,6 +637,22 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
 
             {/* Selectors */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex items-center gap-2.5 w-full lg:w-auto">
+              {/* Voting Scope Dropdown */}
+              <select
+                id="select-scope-filter-winners"
+                value={selectedScope}
+                onChange={(e) => setSelectedScope(e.target.value as any)}
+                className="min-h-[44px] w-full lg:w-auto px-3.5 py-2.5 bg-[#0F172A] border border-slate-700 rounded-xl text-xs text-[#F8FAFC] focus:outline-none focus:border-[#FF8A00] font-medium cursor-pointer"
+              >
+                <option value="all">All Voting Scopes ({winners.length})</option>
+                <option value="church">Entire Church ({scopeCounts.church})</option>
+                <option value="workforce">Entire Workforce ({scopeCounts.workforce})</option>
+                <option value="organisation">Organisation ({scopeCounts.organisation})</option>
+                <option value="department">Department ({scopeCounts.department})</option>
+                <option value="unit">Unit ({scopeCounts.unit})</option>
+                <option value="custom">Custom Group ({scopeCounts.custom})</option>
+              </select>
+
               {/* Year Dropdown */}
               {availableYears.length > 0 && (
                 <select
@@ -565,7 +704,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                   ))}
               </select>
 
-              {(searchQuery || selectedYear !== 'all' || selectedOrg !== 'all' || selectedDept !== 'all' || selectedTab !== 'all') && (
+              {(searchQuery || selectedYear !== 'all' || selectedOrg !== 'all' || selectedDept !== 'all' || selectedScope !== 'all' || selectedTab !== 'all') && (
                 <button
                   onClick={() => {
                     setSearchQuery('');
@@ -573,6 +712,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                     setSelectedYear('all');
                     setSelectedOrg('all');
                     setSelectedDept('all');
+                    setSelectedScope('all');
                   }}
                   className="min-h-[44px] w-full lg:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-amber-400 rounded-xl transition-colors cursor-pointer flex items-center justify-center"
                 >
@@ -580,6 +720,45 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Voting Scope Quick-Filter Pills */}
+          <div className="bg-[#1E293B]/70 p-3 sm:p-4 rounded-2xl border border-slate-800/80 backdrop-blur-md flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5 mr-1.5">
+              <Filter className="w-3.5 h-3.5 text-[#FF8A00]" />
+              <span>Voting Scope:</span>
+            </span>
+            {VOTING_SCOPE_FILTERS.map((sFilter) => {
+              const IconCmp = sFilter.icon;
+              const isSelected = selectedScope === sFilter.id;
+              const count = sFilter.id === 'all' ? winners.length : (scopeCounts[sFilter.id] || 0);
+
+              return (
+                <button
+                  key={sFilter.id}
+                  type="button"
+                  id={`btn-scope-pill-${sFilter.id}`}
+                  onClick={() => setSelectedScope(sFilter.id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                    isSelected
+                      ? `${sFilter.activeClass} scale-[1.02]`
+                      : 'bg-[#0F172A] border-slate-800 text-[#94A3B8] hover:text-[#F8FAFC] hover:border-slate-700'
+                  }`}
+                >
+                  <IconCmp className={`w-3.5 h-3.5 ${isSelected ? 'text-slate-950' : sFilter.color}`} />
+                  <span>{sFilter.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                      isSelected
+                        ? 'bg-black/25 text-slate-950 font-black'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </motion.div>
 
@@ -598,7 +777,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
             </div>
             <h3 className="text-lg sm:text-xl font-bold text-[#F8FAFC] font-display">No Honorees Found</h3>
             <p className="text-xs sm:text-sm text-[#94A3B8] max-w-md mx-auto leading-relaxed">
-              {searchQuery || selectedYear !== 'all' || selectedOrg !== 'all' || selectedDept !== 'all' || selectedTab !== 'all'
+              {searchQuery || selectedYear !== 'all' || selectedOrg !== 'all' || selectedDept !== 'all' || selectedScope !== 'all' || selectedTab !== 'all'
                 ? 'No certified records match your current filter parameters. Try resetting your search filters to explore all honorees.'
                 : 'As voting cycles conclude and certified election results are officially released, honorees will automatically appear in this Hall of Fame.'}
             </p>
@@ -610,6 +789,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                   setSelectedYear('all');
                   setSelectedOrg('all');
                   setSelectedDept('all');
+                  setSelectedScope('all');
                 }}
                 className="min-h-[44px] px-5 py-2.5 bg-[#334155] hover:bg-slate-700 text-[#F8FAFC] rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md"
               >
@@ -839,8 +1019,25 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                           </div>
                         </div>
 
-                        {/* Church Organisation & Both Department Badges */}
+                        {/* Church Organisation, Voting Scope, & Department Badges */}
                         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-1 text-xs">
+                          {/* Voting Scope Badge */}
+                          {(() => {
+                            const wScope = resolveWinnerScope(record);
+                            const scopeCfg = VOTING_SCOPE_FILTERS.find((f) => f.id === wScope);
+                            if (!scopeCfg) return null;
+                            const ScopeIcon = scopeCfg.icon;
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${scopeCfg.badgeBg}`}
+                                title={`Voting Scope: ${scopeCfg.label}`}
+                              >
+                                <ScopeIcon className="w-3.5 h-3.5 shrink-0" />
+                                <span>{scopeCfg.label}</span>
+                              </span>
+                            );
+                          })()}
+
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[#F8FAFC]">
                             <Building2 className="w-3.5 h-3.5 text-[#FF8A00] shrink-0" />
                             <strong className="font-semibold text-[#F8FAFC]">{record.organisationName}</strong>
@@ -861,6 +1058,13 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                               <Layers className="w-3 h-3 text-[#FF8A00] shrink-0" />
                               <span className="font-medium">{record.secondaryDepartmentName}</span>
                               <span className="text-[9px] text-amber-400/80 font-bold uppercase">(Dept 2)</span>
+                            </span>
+                          )}
+
+                          {record.unitName && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/70 border border-rose-500/35 text-rose-300 font-medium">
+                              <Shield className="w-3 h-3 text-rose-400 shrink-0" />
+                              <span>{record.unitName}</span>
                             </span>
                           )}
                         </div>
@@ -903,9 +1107,15 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                           ) : (
                             <>
                               <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
-                                <div className="text-[10px] uppercase tracking-wider text-[#94A3B8] font-bold">Winning Ballots</div>
+                                <div className="text-[10px] uppercase tracking-wider text-[#94A3B8] font-bold">
+                                  {winner.totalScore !== undefined || (record as any).votingMode === 'rating_scale'
+                                    ? 'Score Over 100%'
+                                    : 'Winning Ballots'}
+                                </div>
                                 <div className="text-xs font-bold text-[#FF8A00] font-display mt-0.5">
-                                  {winner.voteCount} votes ({winner.percentage}%)
+                                  {winner.totalScore !== undefined || (record as any).votingMode === 'rating_scale'
+                                    ? `${winner.scoreOver100 ?? winner.percentage}% (Over 100%)`
+                                    : `${winner.voteCount} votes (${winner.percentage}%)`}
                                 </div>
                               </div>
                               <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800">
@@ -1148,13 +1358,19 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                             </div>
 
                             {/* Award Context */}
-                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 border border-amber-500/30 text-amber-300 text-xs font-bold my-3 sm:my-4">
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 border border-amber-500/30 text-amber-300 text-xs font-bold my-3 sm:my-4 flex-wrap justify-center">
                               <Trophy className="w-3.5 h-3.5 text-[#FF8A00]" />
                               <span>{selectedCitationWinner.categoryName || 'Worker of the Month'}</span>
                               <span>•</span>
                               <span>
                                 {selectedCitationWinner.month} {selectedCitationWinner.year}
                               </span>
+                              <span>•</span>
+                              {(() => {
+                                const sc = resolveWinnerScope(selectedCitationWinner);
+                                const scCfg = VOTING_SCOPE_FILTERS.find((f) => f.id === sc);
+                                return <span>{scCfg?.label || 'Entire Workforce'}</span>;
+                              })()}
                             </div>
 
                             {/* Citation Statement */}
