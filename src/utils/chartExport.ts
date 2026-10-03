@@ -166,7 +166,7 @@ export function generateBarChartImage(
       });
 
       // Role/Dept label below name
-      const roleDept = nom.roleOrTitle || nom.department || '';
+      const roleDept = nom.department || '';;
       if (roleDept) {
         ctx.fillStyle = '#64748B';
         ctx.font = 'normal 9.5px sans-serif';
