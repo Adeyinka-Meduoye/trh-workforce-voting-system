@@ -2284,6 +2284,8 @@ export async function toggleResultsPublished(
   dbCache.invalidate('exercises');
   dbCache.invalidate(`exercise_doc_${id}`);
   dbCache.invalidate(`results_${id}`);
+  dbCache.invalidate('previous_winners_master');
+  dbCache.invalidate('previous_winners');
   await logAuditEvent(
     actor,
     resultsPublished ? 'Published Voting Results' : 'Unpublished Voting Results',
@@ -2388,6 +2390,8 @@ export async function deleteVotingExercise(
   dbCache.invalidate(`nominees_${id}`);
   dbCache.invalidate(`results_${id}`);
   dbCache.invalidate(`eligibility_${id}`);
+  dbCache.invalidate('previous_winners_master');
+  dbCache.invalidate('previous_winners');
 
   // Record thorough audit log
   await logAuditEvent(
@@ -3385,11 +3389,30 @@ export async function getAllPreviousWinners(forceRefresh = false): Promise<Winne
       const exercises = await getVotingExercises({ includeArchived: true });
       const winnerRecords: WinnerRecord[] = [];
 
+      // Load Hall of Fame exclusions / soft-deleted records from Firestore
+      const excludedKeys = new Set<string>();
+      try {
+        const exclSnap = await getDocs(collection(db, 'hallOfFameExclusions'));
+        exclSnap.docs.forEach((d) => {
+          excludedKeys.add(d.id);
+          const data = d.data();
+          if (data?.exerciseId) excludedKeys.add(data.exerciseId);
+          if (data?.legacyId) excludedKeys.add(data.legacyId);
+        });
+      } catch (err) {
+        // Exclusions collection might not exist yet
+      }
+
       // Only include exercises whose results have been certified and officially published:
       // 1. If resultsPublished === true (manually or officially published by admin)
       // 2. OR if resultsVisibilityMode === 'publish_after_close' AND the exercise has actually concluded (status === 'closed' or endTime <= now) with votes.
       // Ongoing exercises (status === 'open') or exercises set to 'manual_publish' / 'admin_only' must NEVER show in the Hall of Fame until resultsPublished is explicitly set to true.
       const eligibleExercises = exercises.filter((e) => {
+        // 0. Check if excluded or explicitly marked hidden from Hall of Fame
+        if (e.hiddenFromHallOfFame || excludedKeys.has(e.id)) {
+          return false;
+        }
+
         // 1. If officially published by admin, it is eligible
         if (e.resultsPublished) {
           return true;
@@ -3451,6 +3474,9 @@ export async function getAllPreviousWinners(forceRefresh = false): Promise<Winne
       try {
         const legacyWinners = await getLegacyWinners(forceRefresh);
         for (const lw of legacyWinners) {
+          if (excludedKeys.has(lw.id) || excludedKeys.has(`legacy-${lw.id}`)) {
+            continue;
+          }
           const estDate = getEstimatedDateFromMonthYear(lw.month, lw.year);
 
           const deptNames: string[] = [];
@@ -3747,6 +3773,99 @@ export async function deleteLegacyWinner(
     id,
     `Deleted past winner record from Hall of Fame Archive`
   );
+}
+
+export async function deleteWinnerFromHallOfFame(
+  winnerRecord: WinnerRecord,
+  actor: { id: string; name: string; email?: string; role?: string }
+): Promise<void> {
+  assertSuperAdmin(actor, 'Hall of Fame winner records');
+
+  // Case 1: If it's a legacy record, delete from legacyHallOfFame collection
+  if (winnerRecord.isLegacy && winnerRecord.legacyId) {
+    await deleteLegacyWinner(winnerRecord.legacyId, actor);
+    return;
+  }
+
+  // Case 2: If it's a voting exercise winner
+  const exerciseId = winnerRecord.exerciseId;
+  const isExerciseId = exerciseId && !exerciseId.startsWith('legacy-');
+
+  if (isExerciseId) {
+    try {
+      const docRef = doc(db, 'votingExercises', exerciseId);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        // Exercise still exists in Firestore -> unpublish and mark hiddenFromHallOfFame
+        await updateDoc(docRef, {
+          resultsPublished: false,
+          hiddenFromHallOfFame: true,
+          updatedAt: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      console.warn('Could not update voting exercise document upon Hall of Fame removal:', err);
+    }
+  }
+
+  // Case 3: Record an exclusion document in 'hallOfFameExclusions' collection
+  // This guarantees that even if the exercise was already deleted or orphaned in cache, it will never show up again
+  try {
+    const exclusionKey = winnerRecord.exerciseId || (winnerRecord.isLegacy ? `legacy-${winnerRecord.legacyId}` : `winner-${Date.now()}`);
+    const exclRef = doc(db, 'hallOfFameExclusions', exclusionKey);
+    await setDoc(exclRef, {
+      id: exclusionKey,
+      exerciseId: winnerRecord.exerciseId,
+      legacyId: winnerRecord.legacyId || null,
+      winnerName: winnerRecord.winner?.displayName || 'Unknown',
+      categoryName: winnerRecord.categoryName || '',
+      excludedAt: new Date().toISOString(),
+      excludedBy: {
+        id: actor.id,
+        name: actor.name,
+        email: actor.email || ''
+      }
+    });
+  } catch (err) {
+    console.warn('Could not record hallOfFameExclusions doc:', err);
+  }
+
+  // Invalidate all related caches immediately
+  dbCache.invalidate('previous_winners_master');
+  dbCache.invalidate('previous_winners');
+  dbCache.invalidate('exercises');
+  if (exerciseId) {
+    dbCache.invalidate(`results_${exerciseId}`);
+    dbCache.invalidate(`exercise_doc_${exerciseId}`);
+  }
+
+  // Broadcast cache sync event to all tabs
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('trh_cache_sync', { detail: { key: 'previous_winners_master' } }));
+  }
+
+  await logAuditEvent(
+    actor,
+    'Removed Winner From Hall of Fame',
+    'system',
+    winnerRecord.exerciseId,
+    `Super Administrator permanently removed "${winnerRecord.winner?.displayName || 'Winner'}" (${winnerRecord.categoryName || winnerRecord.exerciseTitle}) from the Hall of Fame.`,
+    {
+      exerciseId: winnerRecord.exerciseId,
+      winner: winnerRecord.winner?.displayName,
+      isLegacy: Boolean(winnerRecord.isLegacy)
+    }
+  );
+}
+
+export function clearHallOfFameCache(): void {
+  dbCache.invalidate('previous_winners_master');
+  dbCache.invalidate('previous_winners');
+  dbCache.invalidate('exercises');
+  dbCache.invalidate('legacy_winners_master');
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('trh_cache_sync', { detail: { key: 'previous_winners_master' } }));
+  }
 }
 
 export async function openVotingExercise(id: string, actor: { id: string; name: string; email?: string }): Promise<void> {

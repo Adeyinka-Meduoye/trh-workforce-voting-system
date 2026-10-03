@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { WinnerRecord, Organisation, Department, VotingScopeType } from '../../types';
-import { getAllPreviousWinners, getOrganisations, getDepartments } from '../../services/db';
+import {
+  getAllPreviousWinners,
+  getOrganisations,
+  getDepartments,
+  deleteWinnerFromHallOfFame,
+  clearHallOfFameCache
+} from '../../services/db';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import {
   Trophy,
   Crown,
@@ -37,7 +45,10 @@ import {
   Church,
   Briefcase,
   Shield,
-  Tag
+  Tag,
+  Trash2,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -146,10 +157,18 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
   onViewResults,
   onNavigateToVote
 }) => {
+  const { isSuperAdmin, isAdmin, userProfile, adminUser } = useAuth();
+  const { success: toastSuccess, error: toastError } = useToast();
+
   const [winners, setWinners] = useState<WinnerRecord[]>([]);
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Deletion modal state for Super Admin
+  const [winnerToDelete, setWinnerToDelete] = useState<WinnerRecord | null>(null);
+  const [isDeletingWinner, setIsDeletingWinner] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Certificate / Citation Modal
   const [selectedCitationWinner, setSelectedCitationWinner] = useState<WinnerRecord | null>(null);
@@ -158,7 +177,7 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
 
   // Handle device back button when any modal is open
   useEffect(() => {
-    const isModalOpen = Boolean(selectedCitationWinner || shareWinner);
+    const isModalOpen = Boolean(selectedCitationWinner || shareWinner || winnerToDelete);
     if (!isModalOpen) return;
 
     window.history.pushState({ modal: true }, '', window.location.href);
@@ -166,13 +185,14 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
     const onPopState = () => {
       setSelectedCitationWinner(null);
       setShareWinner(null);
+      setWinnerToDelete(null);
     };
 
     window.addEventListener('popstate', onPopState);
     return () => {
       window.removeEventListener('popstate', onPopState);
     };
-  }, [Boolean(selectedCitationWinner || shareWinner)]);
+  }, [Boolean(selectedCitationWinner || shareWinner || winnerToDelete)]);
 
   const closeCitationModal = () => {
     if (window.history.state?.modal) {
@@ -198,37 +218,37 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
   const [selectedDept, setSelectedDept] = useState('all');
   const [selectedScope, setSelectedScope] = useState<'all' | VotingScopeType>('all');
 
-  useEffect(() => {
-    const loadData = async (force = false) => {
-      setLoading(true);
-      try {
-        const [wList, orgs, depts] = await Promise.all([
-          getAllPreviousWinners(force),
-          getOrganisations(false, force),
-          getDepartments(undefined, false, force)
-        ]);
-        setWinners(wList);
-        setOrganisations(orgs);
-        setDepartments(depts);
+  const loadData = async (force = false) => {
+    setLoading(true);
+    try {
+      const [wList, orgs, depts] = await Promise.all([
+        getAllPreviousWinners(force),
+        getOrganisations(false, force),
+        getDepartments(undefined, false, force)
+      ]);
+      setWinners(wList);
+      setOrganisations(orgs);
+      setDepartments(depts);
 
-        if (wList.length > 0 && !force) {
-          // Celebrate on arrival with subtle confetti shower
-          setTimeout(() => {
-            confetti({
-              particleCount: 50,
-              spread: 80,
-              origin: { y: 0.25 },
-              colors: ['#FF8A00', '#E85B00', '#251464', '#F8FAFC', '#FBBF24']
-            });
-          }, 350);
-        }
-      } catch (err) {
-        console.error('Error loading previous winners:', err);
-      } finally {
-        setLoading(false);
+      if (wList.length > 0 && !force) {
+        // Celebrate on arrival with subtle confetti shower
+        setTimeout(() => {
+          confetti({
+            particleCount: 50,
+            spread: 80,
+            origin: { y: 0.25 },
+            colors: ['#FF8A00', '#E85B00', '#251464', '#F8FAFC', '#FBBF24']
+          });
+        }, 350);
       }
-    };
+    } catch (err) {
+      console.error('Error loading previous winners:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadData(false);
 
     const handleSync = (e: Event) => {
@@ -243,6 +263,47 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
       window.removeEventListener('trh_cache_sync', handleSync);
     };
   }, []);
+
+  const handleRefreshData = async () => {
+    setIsRefreshing(true);
+    try {
+      clearHallOfFameCache();
+      await loadData(true);
+      toastSuccess('Cache Refreshed', 'Hall of Fame data synced fresh from database.');
+    } catch (err: any) {
+      toastError('Refresh Failed', err?.message || 'Could not refresh data.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleConfirmDeleteWinner = async () => {
+    if (!winnerToDelete) return;
+    setIsDeletingWinner(true);
+    try {
+      const actor = {
+        id: userProfile?.uid || adminUser?.id || 'super-admin',
+        name: userProfile?.displayName || adminUser?.fullName || adminUser?.username || 'Super Administrator',
+        email: userProfile?.email || adminUser?.email || '',
+        role: 'super_admin'
+      };
+      await deleteWinnerFromHallOfFame(winnerToDelete, actor);
+      toastSuccess(
+        'Winner Removed',
+        `Permanently removed "${winnerToDelete.winner?.displayName || 'Honoree'}" from the Hall of Fame.`
+      );
+      setWinnerToDelete(null);
+      if (selectedCitationWinner?.exerciseId === winnerToDelete.exerciseId) {
+        setSelectedCitationWinner(null);
+      }
+      await loadData(true);
+    } catch (err: any) {
+      console.error('Failed to delete winner from Hall of Fame:', err);
+      toastError('Deletion Failed', err?.message || 'Could not remove winner from Hall of Fame.');
+    } finally {
+      setIsDeletingWinner(false);
+    }
+  };
 
   // Compute available years from data
   const availableYears = useMemo(() => {
@@ -600,17 +661,53 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
               </button>
             </div>
 
-            {/* Quick action to vote in active elections */}
-            {onNavigateToVote && (
+            {/* Quick action buttons: Sync & Cast Active Ballot */}
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
               <button
-                onClick={() => onNavigateToVote()}
-                className="min-h-[42px] w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#251464] hover:bg-[#FF8A00] text-[#FF8A00] hover:text-slate-950 border border-[#FF8A00]/40 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md"
+                onClick={handleRefreshData}
+                disabled={isRefreshing}
+                title="Force refresh Hall of Fame records directly from database"
+                className="min-h-[42px] w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-[#94A3B8] hover:text-[#F8FAFC] border border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-md"
               >
-                <Vote className="w-4 h-4" />
-                <span>Cast Active Ballot</span>
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-[#FF8A00]' : ''}`} />
+                <span>Sync Directory</span>
               </button>
-            )}
+
+              {onNavigateToVote && (
+                <button
+                  onClick={() => onNavigateToVote()}
+                  className="min-h-[42px] w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#251464] hover:bg-[#FF8A00] text-[#FF8A00] hover:text-slate-950 border border-[#FF8A00]/40 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md"
+                >
+                  <Vote className="w-4 h-4" />
+                  <span>Cast Active Ballot</span>
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Super Admin Notice & Purge Banner */}
+          {isSuperAdmin && (
+            <div className="bg-gradient-to-r from-amber-500/15 via-[#251464]/40 to-rose-950/30 border border-amber-500/35 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200 shadow-md">
+              <div className="flex items-start sm:items-center gap-2.5">
+                <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+                <div>
+                  <span className="font-bold text-amber-300">Super Administrator Management Mode</span>
+                  <p className="text-slate-300 text-[11px] mt-0.5 leading-relaxed">
+                    You can remove any honoree or purge mistakenly deleted voting exercises from the Hall of Fame using the red delete icon on any winner card below.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleRefreshData}
+                disabled={isRefreshing}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 self-start sm:self-auto cursor-pointer shrink-0"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>Purge Cache &amp; Reload</span>
+              </button>
+            </div>
+          )}
 
           {/* Search & Hierarchical Dropdowns Bar - Fully Responsive */}
           <div className="bg-[#1E293B]/90 rounded-2xl border border-slate-800 shadow-xl p-3.5 sm:p-5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 sm:gap-3.5 backdrop-blur-md">
@@ -953,6 +1050,22 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                           </span>
                         </div>
 
+                        {/* Top-Right Quick Delete Button for Super Admin */}
+                        {isSuperAdmin && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setWinnerToDelete(record);
+                            }}
+                            title="Delete Honoree from Hall of Fame"
+                            className="absolute top-3 right-16 sm:right-24 z-20 p-2 sm:p-2.5 rounded-xl bg-rose-950/85 hover:bg-rose-600 text-rose-300 hover:text-white backdrop-blur-md border border-rose-500/50 transition-all shadow-lg hover:scale-105 cursor-pointer flex items-center gap-1.5"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400" />
+                            <span className="text-[11px] font-bold hidden sm:inline">Delete</span>
+                          </button>
+                        )}
+
                         {/* Top-Right Quick Share Floating Button */}
                         <button
                           onClick={(e) => {
@@ -1155,6 +1268,19 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                           >
                             <Award className="w-4 h-4" />
                           </button>
+
+                          {/* Super Admin Delete from Hall of Fame button */}
+                          {isSuperAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => setWinnerToDelete(record)}
+                              title="Delete this honoree from the Hall of Fame"
+                              className="min-h-[42px] px-2.5 sm:px-3 py-2 bg-rose-950/70 hover:bg-rose-600 text-rose-300 hover:text-white rounded-xl transition-all cursor-pointer border border-rose-800/60 flex items-center justify-center gap-1.5 text-xs font-bold shadow-sm"
+                            >
+                              <Trash2 className="w-4 h-4 text-rose-400" />
+                              <span className="hidden md:inline">Delete</span>
+                            </button>
+                          )}
 
                           {record.isLegacy ? (
                             <button
@@ -1583,6 +1709,22 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
                         </div>
 
                         <div className="flex items-center gap-2">
+                          {/* Super Admin Delete Honoree Button in Modal */}
+                          {isSuperAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setWinnerToDelete(selectedCitationWinner);
+                              }}
+                              title="Delete this honoree from the Hall of Fame"
+                              className="min-h-[42px] inline-flex items-center gap-1.5 px-3 py-2 bg-rose-950/80 hover:bg-rose-600 text-rose-300 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-rose-800/80 shadow-sm"
+                            >
+                              <Trash2 className="w-4 h-4 text-rose-400" />
+                              <span className="hidden sm:inline">Delete Record</span>
+                              <span className="sm:hidden">Delete</span>
+                            </button>
+                          )}
+
                           {/* Share button in modal */}
                           <button
                             onClick={() => setShareWinner(selectedCitationWinner)}
@@ -1616,6 +1758,75 @@ export const WinnersHallOfFame: React.FC<WinnersHallOfFameProps> = ({
           isOpen={Boolean(shareWinner)}
           onClose={closeShareModal}
         />
+
+        {/* SUPER ADMIN CONFIRM DELETE MODAL */}
+        {winnerToDelete && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-[#1E293B] rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-rose-500/40 space-y-4 animate-scaleUp text-[#F8FAFC]">
+              <div className="flex items-start gap-3 border-b border-slate-700/80 pb-3">
+                <div className="w-12 h-12 rounded-xl bg-rose-950/80 text-rose-400 border border-rose-500/40 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Delete Winner from Hall of Fame</h3>
+                  <p className="text-xs text-[#94A3B8] mt-0.5">
+                    Super Administrator Permanent Removal
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <p className="text-slate-300">
+                  Are you sure you want to permanently delete{' '}
+                  <strong className="text-amber-300 font-bold">
+                    {winnerToDelete.winner?.displayName || 'this winner'}
+                  </strong>{' '}
+                  ({winnerToDelete.categoryName || winnerToDelete.exerciseTitle}) from the Hall of Fame directory?
+                </p>
+
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    Deleted Voting Cycle / Stale Record?
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-200/90">
+                    If you mistakenly deleted a voting exercise after publishing results, confirming here will immediately remove this winner from the Hall of Fame, store an exclusion record in Firestore, and clear all caches so it never appears again.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 sm:gap-3 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  disabled={isDeletingWinner}
+                  onClick={() => setWinnerToDelete(null)}
+                  className="px-4 py-2 text-xs font-semibold text-[#94A3B8] hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  id="btn-confirm-delete-winner-hall-of-fame"
+                  disabled={isDeletingWinner}
+                  onClick={handleConfirmDeleteWinner}
+                  className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isDeletingWinner ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Deleting Record...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span>Confirm &amp; Delete</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

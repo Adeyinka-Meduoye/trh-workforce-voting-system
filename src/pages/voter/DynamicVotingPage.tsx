@@ -37,7 +37,9 @@ import {
   ShieldCheck,
   CheckSquare,
   Square,
-  Zap
+  Zap,
+  Loader2,
+  X
 } from 'lucide-react';
 
 interface DynamicVotingPageProps {
@@ -73,8 +75,21 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
   const [inputVoterCode, setInputVoterCode] = useState<string>('');
   const [codeError, setCodeError] = useState<string>('');
   const [verifyingCode, setVerifyingCode] = useState<boolean>(false);
+  const [showVoterCodePromptModal, setShowVoterCodePromptModal] = useState<boolean>(false);
 
   const { success: toastSuccess, error: toastError } = useToast();
+
+  // Robust effective voter resolution
+  const effectiveVoter = useMemo(() => {
+    if (voterSession) return voterSession;
+    try {
+      const stored = localStorage.getItem('church_voter_session');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      // ignore
+    }
+    return null;
+  }, [voterSession]);
 
   // Voting Status & Submission
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -100,8 +115,8 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
       setNominees(noms);
 
       // Check current voter eligibility if session exists
-      if (voterSession && ex) {
-        const el = await checkVoterEligibility(ex.id, voterSession.id);
+      if (effectiveVoter && ex) {
+        const el = await checkVoterEligibility(ex.id, effectiveVoter.id);
         setEligibilityStatus(el);
       }
     } catch (e) {
@@ -113,7 +128,30 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
 
   useEffect(() => {
     loadData();
-  }, [exerciseId, voterSession?.id]);
+  }, [exerciseId, effectiveVoter?.id]);
+
+  // Check URL parameters for voterCode auto-filling & verification
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const codeParam = params.get('code') || params.get('voterCode') || params.get('v');
+      if (codeParam && !effectiveVoter) {
+        const clean = codeParam.trim().toUpperCase();
+        setInputVoterCode(clean);
+        (async () => {
+          setVerifyingCode(true);
+          const res = await authenticateWithVoterCode(clean);
+          setVerifyingCode(false);
+          if (res.success && res.person && exercise) {
+            const el = await checkVoterEligibility(exercise.id, res.person.id, true);
+            setEligibilityStatus(el);
+          }
+        })();
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [exercise?.id, effectiveVoter]);
 
   // Countdown timer calculation
   useEffect(() => {
@@ -148,29 +186,45 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
   // Handle voter code submission / instant vote
   const handleVerifyVoterCode = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputVoterCode.trim()) {
+    const rawCode = inputVoterCode.trim().toUpperCase();
+    if (!rawCode) {
       setCodeError('Please enter your unique voter code.');
       return;
     }
     setCodeError('');
 
-    // If a nominee is already selected, proceed to vote ASAP in one action!
-    if (selectedNominee) {
+    // If single-choice mode and a nominee is already selected, proceed to vote ASAP in one action!
+    if (!isRatingScale && selectedNominee) {
       await handleInstantVote(selectedNominee);
       return;
     }
 
     setVerifyingCode(true);
-    const res = await authenticateWithVoterCode(inputVoterCode.trim());
+    const res = await authenticateWithVoterCode(rawCode);
     setVerifyingCode(false);
 
-    if (!res.success) {
+    if (!res.success || !res.person) {
       setCodeError(res.message || 'Invalid voter code.');
+      toastError('Verification Failed', res.message || 'Invalid voter code.');
     } else if (res.person && exercise) {
-      const el = await checkVoterEligibility(exercise.id, res.person.id);
+      const el = await checkVoterEligibility(exercise.id, res.person.id, true);
       setEligibilityStatus(el);
-      if (el.eligible && !el.hasVoted) {
-        toastSuccess('Code Verified!', 'Your code is confirmed. Tap your preferred nominee below to cast your vote ASAP.');
+      if (!el.eligible) {
+        setCodeError('This member code is not registered as eligible for this exercise.');
+        toastError('Not Eligible', 'This member code is not registered as eligible for this exercise.');
+      } else if (el.hasVoted) {
+        setCodeError('This member code has already submitted a ballot for this exercise.');
+        toastError('Already Voted', 'This member code has already submitted a ballot for this exercise.');
+      } else {
+        if (isRatingScale) {
+          toastSuccess('Code Verified!', `Welcome ${res.person.fullName}. Your voter identity is verified.`);
+          if (isAllScoresCompleted) {
+            setHasReviewedSelection(false);
+            setShowConfirmModal(true);
+          }
+        } else {
+          toastSuccess('Code Verified!', 'Your code is confirmed. Tap your preferred nominee below to cast your vote ASAP.');
+        }
       }
     }
   };
@@ -490,11 +544,11 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
 
   // Handler to select nominee and record category selection
   const handleSelectNominee = (nominee: Nominee) => {
-    const isSelf = voterSession && nominee.personId === voterSession.id;
+    const isSelf = effectiveVoter && nominee.personId === effectiveVoter.id;
     const selfVoteForbidden = isSelf && !exercise?.allowSelfVote;
     if (selfVoteForbidden || eligibilityStatus?.hasVoted || exercise?.status !== 'open') return;
 
-    if (voterSession && nominee.excludedVoterIds && nominee.excludedVoterIds.includes(voterSession.id)) {
+    if (effectiveVoter && nominee.excludedVoterIds && nominee.excludedVoterIds.includes(effectiveVoter.id)) {
       toastError('Voting Restricted', `Under governance recusal rules, you are restricted from voting for "${nominee.displayName}".`);
       return;
     }
@@ -514,18 +568,18 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
 
   // Detect if current authenticated voter is one of the nominees
   const currentVoterNominee = useMemo(() => {
-    if (!voterSession) return null;
+    if (!effectiveVoter) return null;
     return nominees.find(
-      (n) => n.personId === voterSession.id ||
-        (n.displayName && voterSession.fullName && n.displayName.trim().toLowerCase() === voterSession.fullName.trim().toLowerCase())
+      (n) => n.personId === effectiveVoter.id ||
+        (n.displayName && effectiveVoter.fullName && n.displayName.trim().toLowerCase() === effectiveVoter.fullName.trim().toLowerCase())
     );
-  }, [voterSession, nominees]);
+  }, [effectiveVoter, nominees]);
 
   // Check nominees for which this voter is explicitly restricted / recused
   const restrictedNomineesForVoter = useMemo(() => {
-    if (!voterSession) return [];
-    return nominees.filter((n) => n.excludedVoterIds && n.excludedVoterIds.includes(voterSession.id));
-  }, [voterSession, nominees]);
+    if (!effectiveVoter) return [];
+    return nominees.filter((n) => n.excludedVoterIds && n.excludedVoterIds.includes(effectiveVoter.id));
+  }, [effectiveVoter, nominees]);
 
   // Evaluatable nominees (excludes the voter's own nomination AND any nominees for which this voter is restricted/recused)
   const evaluatableNominees = useMemo(() => {
@@ -533,12 +587,12 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
       // 1. Self-nomination restriction
       if (currentVoterNominee && n.id === currentVoterNominee.id) return false;
       // 2. Specific voter exclusion / recusal rule
-      if (voterSession && n.excludedVoterIds && n.excludedVoterIds.includes(voterSession.id)) {
+      if (effectiveVoter && n.excludedVoterIds && n.excludedVoterIds.includes(effectiveVoter.id)) {
         return false;
       }
       return true;
     });
-  }, [nominees, currentVoterNominee, voterSession]);
+  }, [nominees, currentVoterNominee, effectiveVoter]);
 
   // How many eligible candidates have received valid scores
   const scoredCandidatesCount = useMemo(() => {
@@ -561,9 +615,9 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
   const handleSetNomineeScore = (nomineeId: string, score: number) => {
     if (eligibilityStatus?.hasVoted || exercise?.status !== 'open') return;
     if (currentVoterNominee && nomineeId === currentVoterNominee.id) return;
-    if (voterSession) {
+    if (effectiveVoter) {
       const targetNom = nominees.find((n) => n.id === nomineeId);
-      if (targetNom?.excludedVoterIds?.includes(voterSession.id)) {
+      if (targetNom?.excludedVoterIds?.includes(effectiveVoter.id)) {
         toastError('Voting Restricted', `You are restricted from evaluating "${targetNom.displayName}".`);
         return;
       }
@@ -574,9 +628,90 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
     }));
   };
 
+  // Dedicated handler to initiate score ballot review & submission for rating scale exercises
+  const handleInitiateScoreSubmission = async () => {
+    if (!exercise) return;
+    if (exercise.status !== 'open') {
+      toastError('Voting Closed', 'This voting exercise is currently closed.');
+      return;
+    }
+    if (eligibilityStatus?.hasVoted) {
+      toastError('Already Voted', 'You have already submitted a ballot for this exercise.');
+      return;
+    }
+
+    if (!isAllScoresCompleted) {
+      toastError(
+        'Incomplete Rating Ballot',
+        `Please rate all ${evaluatableNominees.length} eligible candidates before submitting (${scoredCandidatesCount}/${evaluatableNominees.length} scored).`
+      );
+      return;
+    }
+
+    // Path 1: Voter is already authenticated
+    if (effectiveVoter) {
+      setHasReviewedSelection(false);
+      setShowConfirmModal(true);
+      return;
+    }
+
+    // Path 2: Voter has typed code in inputVoterCode but hasn't verified
+    const rawCode = inputVoterCode.trim().toUpperCase();
+    if (rawCode) {
+      setVerifyingCode(true);
+      setCodeError('');
+      try {
+        const authRes = await authenticateWithVoterCode(rawCode);
+        if (!authRes.success || !authRes.person) {
+          const err = authRes.message || 'Invalid voter authorization code. Please verify your code.';
+          setCodeError(err);
+          toastError('Verification Failed', err);
+          const el = document.getElementById('input-voter-unique-code');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.focus();
+          }
+          return;
+        }
+
+        const el = await checkVoterEligibility(exercise.id, authRes.person.id, true);
+        setEligibilityStatus(el);
+
+        if (!el.eligible) {
+          const msg = 'This member code is not registered as an eligible voter for this exercise.';
+          setCodeError(msg);
+          toastError('Not Eligible', msg);
+          return;
+        }
+
+        if (el.hasVoted) {
+          const msg = 'This member code has already submitted a ballot for this exercise.';
+          setCodeError(msg);
+          toastError('Already Voted', msg);
+          return;
+        }
+
+        toastSuccess('Identity Verified!', `Welcome ${authRes.person.fullName}. Opening your rating ballot review.`);
+        setHasReviewedSelection(false);
+        setShowConfirmModal(true);
+      } catch (err: any) {
+        setCodeError(err.message || 'Error verifying voter code.');
+        toastError('Verification Error', err.message || 'Error verifying voter code.');
+      } finally {
+        setVerifyingCode(false);
+      }
+      return;
+    }
+
+    // Path 3: No code entered yet -> Open the prompt modal to enter voter code smoothly
+    setCodeError('');
+    setShowVoterCodePromptModal(true);
+  };
+
   // Handler for score ballot submission
   const handleConfirmScoreBallot = async () => {
-    if (!exercise || !voterSession) return;
+    const voter = effectiveVoter;
+    if (!exercise || !voter) return;
 
     const unScored = evaluatableNominees.filter((n) => {
       const sc = nomineeScores[n.id];
@@ -591,18 +726,26 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
       return;
     }
 
+    // Filter scores strictly to evaluatable nominees (excludes self-nominee and recused candidates)
+    const validScores: Record<string, number> = {};
+    evaluatableNominees.forEach((n) => {
+      if (typeof nomineeScores[n.id] === 'number') {
+        validScores[n.id] = nomineeScores[n.id];
+      }
+    });
+
     setIsSubmitting(true);
     try {
       const res = await submitVote(
         exercise.id,
-        nomineeScores,
+        validScores,
         {
-          personId: voterSession.id,
-          voterName: voterSession.fullName,
-          voterCode: voterSession.voterCode,
-          voterEmail: voterSession.email
+          personId: voter.id,
+          voterName: voter.fullName,
+          voterCode: voter.voterCode,
+          voterEmail: voter.email
         },
-        { scores: nomineeScores }
+        { scores: validScores }
       );
 
       setSubmissionResult(res);
@@ -617,7 +760,7 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
         setEligibilityStatus({ eligible: true, hasVoted: true });
         toastSuccess(
           'Evaluation Ballot Recorded!',
-          `Your rating evaluation for ${evaluatableNominees.length} candidates in "${exercise.title}" has been securely recorded. (Receipt: ${res.receiptHash || voterSession.voterCode})`,
+          `Your rating evaluation for ${evaluatableNominees.length} candidates in "${exercise.title}" has been securely recorded. (Receipt: ${res.receiptHash || voter.voterCode})`,
           8000
         );
       } else {
@@ -1013,15 +1156,15 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                 <div className="min-w-0 flex-1">
                   <h3 className="text-sm font-bold text-[#F8FAFC]">Voter Identity Verification</h3>
                   <p className="text-xs text-[#94A3B8] mt-0.5">
-                    {voterSession
-                      ? `Verified as ${voterSession.fullName}`
+                    {effectiveVoter
+                      ? `Verified as ${effectiveVoter.fullName}`
                       : 'Enter your voting code to cast in an instant'}
                   </p>
                 </div>
               </div>
 
               {/* Status / Code Form */}
-              {voterSession ? (
+              {effectiveVoter ? (
                 <div className="p-3.5 bg-[#0F172A] rounded-xl border border-emerald-500/30 space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
@@ -1029,12 +1172,12 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                       <span>Verified Member</span>
                     </div>
                     <span className="font-mono text-xs font-bold text-[#FF8A00] bg-[#251464] px-2 py-0.5 rounded border border-[#FF8A00]/30">
-                      {voterSession.voterCode}
+                      {effectiveVoter.voterCode}
                     </span>
                   </div>
 
                   <div className="text-xs text-[#F8FAFC] font-medium break-words">
-                    {voterSession.fullName}
+                    {effectiveVoter.fullName}
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] text-[#94A3B8] pt-1 border-t border-slate-800">
@@ -1060,7 +1203,7 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                     <label className="block text-xs font-semibold text-[#94A3B8]">
                       Your Unique Voter Code
                     </label>
-                    <div className="relative">
+                    <div className="flex gap-2">
                       <input
                         type="text"
                         id="input-voter-unique-code"
@@ -1070,8 +1213,22 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                           setInputVoterCode(e.target.value.toUpperCase());
                           setCodeError('');
                         }}
-                        className="w-full px-3.5 py-2.5 bg-[#0F172A] border border-[#475569] rounded-xl text-xs font-mono uppercase text-[#F8FAFC] placeholder-[#64748B] focus:outline-none focus:border-[#FF8A00] transition-colors tracking-wider"
+                        className="flex-1 min-w-0 px-3.5 py-2.5 bg-[#0F172A] border border-[#475569] rounded-xl text-xs font-mono uppercase text-[#F8FAFC] placeholder-[#64748B] focus:outline-none focus:border-[#FF8A00] transition-colors tracking-wider"
                       />
+                      <button
+                        type="submit"
+                        id="btn-verify-voter-code"
+                        disabled={verifyingCode || !inputVoterCode.trim()}
+                        className="px-3.5 py-2.5 bg-gradient-to-r from-[#FF8A00] to-amber-500 hover:from-[#E85B00] hover:to-amber-600 text-slate-950 font-black text-xs rounded-xl transition-all shadow disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                        title="Verify your unique voter code"
+                      >
+                        {verifyingCode ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        )}
+                        <span>{verifyingCode ? 'Verifying...' : 'Verify'}</span>
+                      </button>
                     </div>
                   </form>
 
@@ -1143,20 +1300,15 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                         type="button"
                         id="btn-submit-score-ballot"
                         disabled={isSubmitting || verifyingCode || !isAllScoresCompleted}
-                        onClick={() => {
-                          if (!voterSession) {
-                            setCodeError('Please enter and verify your voting code first.');
-                            return;
-                          }
-                          setHasReviewedSelection(false);
-                          setShowConfirmModal(true);
-                        }}
+                        onClick={handleInitiateScoreSubmission}
                         className="w-full py-3 px-4 bg-gradient-to-r from-[#FF8A00] to-amber-500 hover:from-[#E85B00] hover:to-amber-600 text-slate-950 font-black text-sm rounded-xl transition-all shadow-lg hover:shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Sparkles className="w-4 h-4 fill-slate-950" />
                         <span>
                           {isSubmitting
                             ? 'Submitting Ballot...'
+                            : verifyingCode
+                            ? 'Verifying Code...'
                             : !isAllScoresCompleted
                             ? `Score All Candidates (${scoredCandidatesCount}/${evaluatableNominees.length})`
                             : 'Review & Submit Ballot'}
@@ -1302,12 +1454,12 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                   const isSelected = categoriesList.length > 1
                     ? categorySelections[nomineeCat] === nominee.id
                     : selectedNomineeId === nominee.id;
-                  const isSelf = voterSession && (
-                    nominee.personId === voterSession.id ||
-                    (nominee.displayName && voterSession.fullName && nominee.displayName.trim().toLowerCase() === voterSession.fullName.trim().toLowerCase())
+                  const isSelf = effectiveVoter && (
+                    nominee.personId === effectiveVoter.id ||
+                    (nominee.displayName && effectiveVoter.fullName && nominee.displayName.trim().toLowerCase() === effectiveVoter.fullName.trim().toLowerCase())
                   );
                   const isVoterRestrictedForNominee = Boolean(
-                    voterSession && nominee.excludedVoterIds && nominee.excludedVoterIds.includes(voterSession.id)
+                    effectiveVoter && nominee.excludedVoterIds && nominee.excludedVoterIds.includes(effectiveVoter.id)
                   );
                   const selfVoteForbidden = (isSelf && (!exercise.allowSelfVote || isRatingScale)) || isVoterRestrictedForNominee;
 
@@ -1680,19 +1832,18 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
             {isRatingScale ? (
               <button
                 id="btn-submit-rating-ballot"
-                disabled={!isOpen || !isAllScoresCompleted || isSubmitting}
-                onClick={() => {
-                  if (!voterSession) {
-                    setCodeError('Please enter and verify your voting code first.');
-                    return;
-                  }
-                  setHasReviewedSelection(false);
-                  setShowConfirmModal(true);
-                }}
+                disabled={!isOpen || !isAllScoresCompleted || isSubmitting || verifyingCode}
+                onClick={handleInitiateScoreSubmission}
                 className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-[#FF8A00] to-amber-500 hover:from-[#E85B00] hover:to-amber-600 text-slate-950 rounded-xl text-sm font-black tracking-wide transition-all shadow-lg hover:shadow-amber-500/25 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Sparkles className="w-4 h-4 fill-slate-950" />
-                <span>{isSubmitting ? 'Recording Ballot...' : 'Review & Submit Ballot'}</span>
+                <span>
+                  {isSubmitting
+                    ? 'Recording Ballot...'
+                    : verifyingCode
+                    ? 'Verifying Code...'
+                    : 'Review & Submit Ballot'}
+                </span>
               </button>
             ) : (
               <button
@@ -1711,18 +1862,18 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
       )}
 
       {/* CONFIRMATION MODAL WITH SELECTION REVIEW */}
-      {showConfirmModal && voterSession && (isRatingScale ? true : selectedNominee) && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#1E293B] rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#334155] space-y-5 animate-scaleUp text-[#F8FAFC] my-8">
+      {showConfirmModal && (effectiveVoter || voterSession) && (isRatingScale ? true : selectedNominee) && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-hidden">
+          <div className="bg-[#1E293B] rounded-2xl max-w-lg w-full shadow-2xl border border-[#334155] animate-scaleUp text-[#F8FAFC] my-auto flex flex-col max-h-[92dvh] sm:max-h-[88vh] overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-start justify-between gap-3 border-b border-slate-700/80 pb-4">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-700/80 p-4 sm:p-5 pb-3 sm:pb-4 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-[#251464] text-[#FF8A00] border border-[#FF8A00]/40 flex items-center justify-center shrink-0 shadow-inner">
-                  <ShieldCheck className="w-6 h-6" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-[#251464] text-[#FF8A00] border border-[#FF8A00]/40 flex items-center justify-center shrink-0 shadow-inner">
+                  <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-[#F8FAFC] font-display">
-                    {isRatingScale ? 'Review Your Rating Ballot' : 'Review & Confirm Your Vote'}
+                  <h3 className="text-base sm:text-lg font-bold text-[#F8FAFC] font-display">
+                    {isRatingScale ? 'Review Your Rating Score' : 'Review & Confirm Your Vote'}
                   </h3>
                   <p className="text-xs text-[#94A3B8] mt-0.5">
                     {isRatingScale
@@ -1731,172 +1882,183 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                   </p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="text-[#94A3B8] hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                aria-label="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* Candidate Review Body */}
-            {isRatingScale ? (
-              <div className="space-y-3">
-                <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                    Candidate Scores Breakdown ({evaluatableNominees.length})
-                  </span>
-                  <span className="text-amber-300 font-mono text-xs">
-                    Avg: {averageScoreGiven} / {maxScore} pts
-                  </span>
-                </div>
-
-                <div className="p-3 bg-[#0F172A] rounded-xl border border-slate-800 space-y-2 max-h-56 overflow-y-auto">
-                  {evaluatableNominees.map((nom) => {
-                    const sc = nomineeScores[nom.id];
-                    return (
-                      <div key={nom.id} className="flex justify-between items-center py-1.5 border-b border-slate-800/60 last:border-0 text-xs">
-                        <div className="min-w-0 flex-1 pr-3">
-                          <span className="font-semibold text-white truncate block">{nom.displayName}</span>
-                          <span className="text-[11px] text-slate-400 truncate block">
-                            {[nom.roleOrTitle, nom.department].filter(Boolean).join(' • ')}
-                          </span>
-                        </div>
-                        <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 shrink-0 font-mono">
-                          {sc ?? '—'} / {maxScore} pts
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {currentVoterNominee && (
-                  <p className="text-[11px] text-amber-400/90 italic">
-                    * Per church integrity rules, your own nomination is excluded from receiving a score.
-                  </p>
-                )}
-              </div>
-            ) : selectedNominee ? (
-              <div className="space-y-3">
-                <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-[#FF8A00]" />
-                  <span>Selected Candidate Review</span>
-                </div>
-
-                <div className="p-4 bg-[#0F172A] rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-[#0F172A] to-[#0F172A] space-y-3">
-                  <div className="flex items-center gap-3.5">
-                    {selectedNominee.photoUrl ? (
-                      <img
-                        src={selectedNominee.photoUrl}
-                        alt={selectedNominee.displayName}
-                        className="w-14 h-14 rounded-xl object-cover border-2 border-[#FF8A00]/50 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#251464] to-[#3a1d94] border-2 border-[#FF8A00]/40 text-[#FF8A00] font-black text-xl flex items-center justify-center shrink-0">
-                        {selectedNominee.displayName.charAt(0)}
-                      </div>
-                    )}
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-base font-black text-[#F8FAFC] break-words whitespace-normal leading-tight">
-                          {selectedNominee.displayName}
-                        </h4>
-                        <span className="px-2 py-0.5 rounded-md bg-[#251464] text-[#FF8A00] border border-[#FF8A00]/30 text-[10px] font-bold">
-                          {getNomineeCategory(selectedNominee)}
-                        </span>
-                      </div>
-
-                      {(selectedNominee.roleOrTitle || selectedNominee.department || selectedNominee.unit) && (
-                        <p className="text-xs text-[#94A3B8] mt-0.5 break-words whitespace-normal">
-                          {[selectedNominee.roleOrTitle, selectedNominee.department, selectedNominee.unit]
-                            .filter(Boolean)
-                            .join(' • ')}
-                        </p>
-                      )}
-                    </div>
+            {/* Scrollable Modal Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto overscroll-contain flex-1 space-y-4">
+              {/* Candidate Review Body */}
+              {isRatingScale ? (
+                <div className="space-y-2.5">
+                  <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      Candidate Scores Breakdown ({evaluatableNominees.length})
+                    </span>
+                    <span className="text-amber-300 font-mono text-xs">
+                      Avg: {averageScoreGiven} / {maxScore} pts
+                    </span>
                   </div>
 
-                  {selectedNominee.bio && (
-                    <p className="text-xs text-slate-300/90 italic bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 line-clamp-2">
-                      "{selectedNominee.bio}"
+                  <div className="p-3 bg-[#0F172A] rounded-xl border border-slate-800 space-y-2">
+                    {evaluatableNominees.map((nom) => {
+                      const sc = nomineeScores[nom.id];
+                      return (
+                        <div key={nom.id} className="flex justify-between items-center py-2 border-b border-slate-800/60 last:border-0 text-xs">
+                          <div className="min-w-0 flex-1 pr-3">
+                            <span className="font-semibold text-white truncate block">{nom.displayName}</span>
+                            <span className="text-[11px] text-slate-400 truncate block">
+                              {[nom.roleOrTitle, nom.department].filter(Boolean).join(' • ')}
+                            </span>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 shrink-0 font-mono text-xs">
+                            {sc ?? '—'} / {maxScore} pts
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {currentVoterNominee && (
+                    <p className="text-[11px] text-amber-400/90 italic">
+                      * Per church integrity rules, your own nomination is excluded from receiving a score.
                     </p>
                   )}
                 </div>
-              </div>
-            ) : null}
+              ) : selectedNominee ? (
+                <div className="space-y-3">
+                  <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-[#FF8A00]" />
+                    <span>Selected Candidate Review</span>
+                  </div>
 
-            {/* Multi-Category Breakdown (if applicable) */}
-            {!isRatingScale && categoriesList.length > 1 && (
-              <div className="space-y-2">
-                <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-[#FF8A00]" />
-                  <span>All Category Choices ({categoriesList.length})</span>
-                </div>
-                <div className="p-3 bg-[#0F172A] rounded-xl border border-slate-800 space-y-1.5 max-h-36 overflow-y-auto">
-                  {categoriesList.map((cat: string) => {
-                    const selId = categorySelections[cat];
-                    const selNom = nominees.find((n) => n.id === selId);
-                    return (
-                      <div key={cat} className="flex justify-between items-center py-1 border-b border-slate-800/60 text-xs last:border-0">
-                        <span className="text-[#94A3B8] truncate max-w-[180px] font-medium">{cat}:</span>
-                        <span className="font-bold text-[#FF8A00] flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                          {selNom ? selNom.displayName : '—'}
-                        </span>
+                  <div className="p-4 bg-[#0F172A] rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-[#0F172A] to-[#0F172A] space-y-3">
+                    <div className="flex items-center gap-3.5">
+                      {selectedNominee.photoUrl ? (
+                        <img
+                          src={selectedNominee.photoUrl}
+                          alt={selectedNominee.displayName}
+                          className="w-14 h-14 rounded-xl object-cover border-2 border-[#FF8A00]/50 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#251464] to-[#3a1d94] border-2 border-[#FF8A00]/40 text-[#FF8A00] font-black text-xl flex items-center justify-center shrink-0">
+                          {selectedNominee.displayName.charAt(0)}
+                        </div>
+                      )}
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-base font-black text-[#F8FAFC] break-words whitespace-normal leading-tight">
+                            {selectedNominee.displayName}
+                          </h4>
+                          <span className="px-2 py-0.5 rounded-md bg-[#251464] text-[#FF8A00] border border-[#FF8A00]/30 text-[10px] font-bold">
+                            {getNomineeCategory(selectedNominee)}
+                          </span>
+                        </div>
+
+                        {(selectedNominee.roleOrTitle || selectedNominee.department || selectedNominee.unit) && (
+                          <p className="text-xs text-[#94A3B8] mt-0.5 break-words whitespace-normal">
+                            {[selectedNominee.roleOrTitle, selectedNominee.department, selectedNominee.unit]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </p>
+                        )}
                       </div>
-                    );
-                  })}
+                    </div>
+
+                    {selectedNominee.bio && (
+                      <p className="text-xs text-slate-300/90 italic bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 line-clamp-2">
+                        "{selectedNominee.bio}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Multi-Category Breakdown (if applicable) */}
+              {!isRatingScale && categoriesList.length > 1 && (
+                <div className="space-y-2">
+                  <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-[#FF8A00]" />
+                    <span>All Category Choices ({categoriesList.length})</span>
+                  </div>
+                  <div className="p-3 bg-[#0F172A] rounded-xl border border-slate-800 space-y-1.5 max-h-36 overflow-y-auto">
+                    {categoriesList.map((cat: string) => {
+                      const selId = categorySelections[cat];
+                      const selNom = nominees.find((n) => n.id === selId);
+                      return (
+                        <div key={cat} className="flex justify-between items-center py-1 border-b border-slate-800/60 text-xs last:border-0">
+                          <span className="text-[#94A3B8] truncate max-w-[180px] font-medium">{cat}:</span>
+                          <span className="font-bold text-[#FF8A00] flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            {selNom ? selNom.displayName : '—'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Exercise & Voter Audit Details */}
+              <div className="p-3.5 bg-[#0F172A] rounded-xl border border-[#334155] space-y-2 text-xs">
+                <div className="flex justify-between text-[#94A3B8]">
+                  <span>Voting Exercise:</span>
+                  <span className="font-semibold text-[#F8FAFC] truncate max-w-[240px]">{exercise.title}</span>
+                </div>
+                <div className="flex justify-between text-[#94A3B8]">
+                  <span>Verified Church Member:</span>
+                  <span className="font-semibold text-[#F8FAFC]">{(effectiveVoter || voterSession)?.fullName}</span>
+                </div>
+                <div className="flex justify-between text-[#94A3B8] font-mono">
+                  <span>Voter Authorization Code:</span>
+                  <span className="font-bold text-[#FF8A00]">{(effectiveVoter || voterSession)?.voterCode}</span>
                 </div>
               </div>
-            )}
 
-            {/* Exercise & Voter Audit Details */}
-            <div className="p-3.5 bg-[#0F172A] rounded-xl border border-[#334155] space-y-2 text-xs">
-              <div className="flex justify-between text-[#94A3B8]">
-                <span>Voting Exercise:</span>
-                <span className="font-semibold text-[#F8FAFC] truncate max-w-[240px]">{exercise.title}</span>
-              </div>
-              <div className="flex justify-between text-[#94A3B8]">
-                <span>Verified Church Member:</span>
-                <span className="font-semibold text-[#F8FAFC]">{voterSession.fullName}</span>
-              </div>
-              <div className="flex justify-between text-[#94A3B8] font-mono">
-                <span>Voter Authorization Code:</span>
-                <span className="font-bold text-[#FF8A00]">{voterSession.voterCode}</span>
-              </div>
+              {/* Mandatory Review & Confirmation Checkbox */}
+              <label
+                htmlFor="checkbox-confirm-review"
+                className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
+                  hasReviewedSelection
+                    ? 'bg-emerald-500/10 border-emerald-500/40 text-slate-100'
+                    : 'bg-[#0F172A] border-slate-700 hover:border-slate-600 text-slate-300'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  id="checkbox-confirm-review"
+                  checked={hasReviewedSelection}
+                  onChange={(e) => setHasReviewedSelection(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded text-[#FF8A00] focus:ring-[#FF8A00] border-slate-600 bg-slate-800 cursor-pointer"
+                />
+                <div className="text-xs space-y-0.5">
+                  <span className="font-bold text-[#F8FAFC]">
+                    {isRatingScale
+                      ? 'I have reviewed my scores above and confirm this is my final official rating ballot.'
+                      : 'I have reviewed my selection above and confirm this is my final official vote.'}
+                  </span>
+                  <p className="text-[11px] text-[#94A3B8]">
+                    I acknowledge that once submitted, this ballot will be written permanently to Firestore and cannot be amended.
+                  </p>
+                </div>
+              </label>
             </div>
 
-            {/* Mandatory Review & Confirmation Checkbox */}
-            <label
-              htmlFor="checkbox-confirm-review"
-              className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
-                hasReviewedSelection
-                  ? 'bg-emerald-500/10 border-emerald-500/40 text-slate-100'
-                  : 'bg-[#0F172A] border-slate-700 hover:border-slate-600 text-slate-300'
-              }`}
-            >
-              <input
-                type="checkbox"
-                id="checkbox-confirm-review"
-                checked={hasReviewedSelection}
-                onChange={(e) => setHasReviewedSelection(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded text-[#FF8A00] focus:ring-[#FF8A00] border-slate-600 bg-slate-800 cursor-pointer"
-              />
-              <div className="text-xs space-y-0.5">
-                <span className="font-bold text-[#F8FAFC]">
-                  {isRatingScale
-                    ? 'I have reviewed my scores above and confirm this is my final official rating ballot.'
-                    : 'I have reviewed my selection above and confirm this is my final official vote.'}
-                </span>
-                <p className="text-[11px] text-[#94A3B8]">
-                  I acknowledge that once submitted, this ballot will be written permanently to Firestore and cannot be amended.
-                </p>
-              </div>
-            </label>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2 border-t border-slate-800">
+            {/* Action Buttons Footer - Sticky at bottom */}
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 sm:gap-3 p-3.5 sm:p-4 sm:px-6 border-t border-slate-800 bg-[#162032] shrink-0">
               <button
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => setShowConfirmModal(false)}
-                className="w-full sm:w-auto px-4 py-2.5 text-[#94A3B8] hover:text-[#F8FAFC] text-xs font-semibold rounded-xl hover:bg-slate-800 transition-colors text-center"
+                className="w-full sm:w-auto px-4 py-2.5 text-[#94A3B8] hover:text-[#F8FAFC] text-xs font-semibold rounded-xl hover:bg-slate-800 transition-colors text-center cursor-pointer"
               >
                 Cancel & Edit
               </button>
@@ -1911,7 +2073,7 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
               >
                 {isSubmitting ? (
                   <>
-                    <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     <span>Recording Ballot...</span>
                   </>
                 ) : (
@@ -1922,6 +2084,138 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* VOTER CODE PROMPT MODAL FOR RATING BALLOT */}
+      {showVoterCodePromptModal && !effectiveVoter && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#1E293B] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#334155] space-y-5 animate-scaleUp text-[#F8FAFC] my-8">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-700/80 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-[#251464] text-[#FF8A00] border border-[#FF8A00]/40 flex items-center justify-center shrink-0 shadow-inner">
+                  <KeyRound className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#F8FAFC]">
+                    Enter Voter Authorization Code
+                  </h3>
+                  <p className="text-xs text-[#94A3B8] mt-0.5">
+                    Verify your identity to submit your rating evaluation
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVoterCodePromptModal(false)}
+                className="text-[#94A3B8] hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/30 text-xs text-amber-200 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                All <strong>{evaluatableNominees.length}</strong> candidates have been evaluated. Enter your voter authorization code to verify eligibility and review your ballot.
+              </span>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const raw = inputVoterCode.trim().toUpperCase();
+                if (!raw) {
+                  setCodeError('Please enter your unique voter code.');
+                  return;
+                }
+                setVerifyingCode(true);
+                setCodeError('');
+                try {
+                  const authRes = await authenticateWithVoterCode(raw);
+                  if (!authRes.success || !authRes.person) {
+                    setCodeError(authRes.message || 'Invalid voter authorization code.');
+                    return;
+                  }
+                  if (exercise) {
+                    const el = await checkVoterEligibility(exercise.id, authRes.person.id, true);
+                    setEligibilityStatus(el);
+                    if (!el.eligible) {
+                      setCodeError('This member code is not registered as eligible for this exercise.');
+                      return;
+                    }
+                    if (el.hasVoted) {
+                      setCodeError('This member code has already submitted a ballot for this exercise.');
+                      return;
+                    }
+                  }
+                  setShowVoterCodePromptModal(false);
+                  setHasReviewedSelection(false);
+                  setShowConfirmModal(true);
+                  toastSuccess('Identity Verified!', `Welcome ${authRes.person.fullName}. Review your ballot below.`);
+                } catch (err: any) {
+                  setCodeError(err.message || 'Failed to verify voter code.');
+                } finally {
+                  setVerifyingCode(false);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-[#94A3B8]">
+                  Your Unique Voter Code
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="modal-input-voter-code"
+                    autoFocus
+                    placeholder="e.g. VOTE-XXXXXX"
+                    value={inputVoterCode}
+                    onChange={(e) => {
+                      setInputVoterCode(e.target.value.toUpperCase());
+                      setCodeError('');
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-[#0F172A] border border-[#475569] rounded-xl text-sm font-mono uppercase text-[#F8FAFC] placeholder-[#64748B] focus:outline-none focus:border-[#FF8A00] tracking-wider"
+                  />
+                </div>
+                {codeError && (
+                  <div className="text-xs text-rose-400 flex items-center gap-1.5 p-2.5 bg-rose-950/40 rounded-lg border border-rose-800/60 mt-2">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{codeError}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowVoterCodePromptModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-[#94A3B8] hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  id="btn-modal-verify-and-review"
+                  disabled={verifyingCode || !inputVoterCode.trim()}
+                  className="px-5 py-2.5 bg-gradient-to-r from-[#FF8A00] to-amber-500 hover:from-[#E85B00] hover:to-amber-600 text-slate-950 font-black text-xs rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {verifyingCode ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Verifying...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Verify & Review Ballot</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

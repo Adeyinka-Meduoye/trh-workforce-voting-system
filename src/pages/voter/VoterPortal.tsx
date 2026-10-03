@@ -65,7 +65,7 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'open' | 'published'
-  >('all');
+  >('open');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Active view inside voter portal
@@ -615,30 +615,9 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
 
               {/* Status Filter */}
               <div className="flex items-center bg-[#0F172A] p-1 rounded-xl border border-[#334155] text-xs">
-
-                {/* All */}
+                {/* Open (Default) */}
                 <button
-                  onClick={() =>
-                    setStatusFilter(
-                      'all'
-                    )
-                  }
-                  className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                    statusFilter === 'all'
-                      ? 'bg-gradient-to-r from-[#FF8A00] to-[#E85B00] text-slate-950 shadow-md font-bold'
-                      : 'text-[#94A3B8] hover:text-[#F8FAFC]'
-                  }`}
-                >
-                  All
-                </button>
-
-                {/* Open */}
-                <button
-                  onClick={() =>
-                    setStatusFilter(
-                      'open'
-                    )
-                  }
+                  onClick={() => setStatusFilter('open')}
                   className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
                     statusFilter === 'open'
                       ? 'bg-gradient-to-r from-[#FF8A00] to-[#E85B00] text-slate-950 shadow-md font-bold'
@@ -648,23 +627,29 @@ export const VoterPortal: React.FC<VoterPortalProps> = ({
                   Open
                 </button>
 
+                {/* All */}
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
+                    statusFilter === 'all'
+                      ? 'bg-gradient-to-r from-[#FF8A00] to-[#E85B00] text-slate-950 shadow-md font-bold'
+                      : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                  }`}
+                >
+                  All
+                </button>
+
                 {/* Results */}
                 <button
-                  onClick={() =>
-                    setStatusFilter(
-                      'published'
-                    )
-                  }
+                  onClick={() => setStatusFilter('published')}
                   className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                    statusFilter ===
-                    'published'
+                    statusFilter === 'published'
                       ? 'bg-gradient-to-r from-[#FF8A00] to-[#E85B00] text-slate-950 shadow-md font-bold'
                       : 'text-[#94A3B8] hover:text-[#F8FAFC]'
                   }`}
                 >
                   Results
                 </button>
-
               </div>
 
             </div>

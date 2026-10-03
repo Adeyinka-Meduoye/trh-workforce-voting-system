@@ -142,6 +142,7 @@ export interface VotingExercise {
   endTime: string;   // ISO 8601 string
   resultsPublished: boolean;
   resultsVisibilityMode?: 'admin_only' | 'publish_after_close' | 'manual_publish';
+  hiddenFromHallOfFame?: boolean;
   allowSelfVote: boolean;
   maxVotesPerPerson?: number;
   votingMode: 'single_choice' | 'rating_scale';
