@@ -1863,19 +1863,19 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
 
       {/* CONFIRMATION MODAL WITH SELECTION REVIEW */}
       {showConfirmModal && (effectiveVoter || voterSession) && (isRatingScale ? true : selectedNominee) && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-hidden">
-          <div className="bg-[#1E293B] rounded-2xl max-w-lg w-full shadow-2xl border border-[#334155] animate-scaleUp text-[#F8FAFC] my-auto flex flex-col max-h-[92dvh] sm:max-h-[88vh] overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto">
+          <div className="bg-[#1E293B] rounded-2xl max-w-lg w-full shadow-2xl border border-[#334155] animate-scaleUp text-[#F8FAFC] my-auto flex flex-col max-h-[90dvh] sm:max-h-[85vh] overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-start justify-between gap-3 border-b border-slate-700/80 p-4 sm:p-5 pb-3 sm:pb-4 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-[#251464] text-[#FF8A00] border border-[#FF8A00]/40 flex items-center justify-center shrink-0 shadow-inner">
-                  <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
+            <div className="flex items-start justify-between gap-3 border-b border-slate-700/80 p-3.5 sm:p-5 pb-3 sm:pb-4 shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-[#251464] text-[#FF8A00] border border-[#FF8A00]/40 flex items-center justify-center shrink-0 shadow-inner">
+                  <ShieldCheck className="w-4 h-4 sm:w-6 sm:h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base sm:text-lg font-bold text-[#F8FAFC] font-display">
+                  <h3 className="text-sm sm:text-lg font-bold text-[#F8FAFC] font-display">
                     {isRatingScale ? 'Review Your Rating Score' : 'Review & Confirm Your Vote'}
                   </h3>
-                  <p className="text-xs text-[#94A3B8] mt-0.5">
+                  <p className="text-[11px] sm:text-xs text-[#94A3B8] mt-0.5">
                     {isRatingScale
                       ? `Confirm the evaluation scores assigned to all ${evaluatableNominees.length} candidates.`
                       : 'Please review your selection before submitting. This vote cannot be modified once cast.'}
@@ -1893,7 +1893,10 @@ export const DynamicVotingPage: React.FC<DynamicVotingPageProps> = ({
             </div>
 
             {/* Scrollable Modal Body */}
-            <div className="p-4 sm:p-5 overflow-y-auto overscroll-contain flex-1 space-y-4">
+            <div
+              className="p-3.5 sm:p-5 overflow-y-auto overscroll-contain flex-1 min-h-0 space-y-3.5 sm:space-y-4 touch-pan-y"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               {/* Candidate Review Body */}
               {isRatingScale ? (
                 <div className="space-y-2.5">

@@ -48,7 +48,7 @@ export function generateBarChartImage(
   exercise: VotingExercise,
   results: VotingResult,
   width = 1000,
-  height = 580
+  height = 620
 ): string {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -83,7 +83,7 @@ export function generateBarChartImage(
   // Header Title
   ctx.fillStyle = '#94A3B8';
   ctx.font = 'bold 12px sans-serif';
-  ctx.letterSpacing = '1px';
+  ctx.textAlign = 'left';
   ctx.fillText('OFFICIAL ELECTION AUDIT RECORD • VOTE DISTRIBUTION', 40, 48);
 
   ctx.fillStyle = '#F8FAFC';
@@ -96,8 +96,8 @@ export function generateBarChartImage(
   ctx.fillText(subtitle, 40, 102);
 
   // Chart Dimensions
-  const chartTop = 140;
-  const chartBottom = height - 90;
+  const chartTop = 135;
+  const chartBottom = height - 125;
   const chartHeight = chartBottom - chartTop;
   const chartLeft = 80;
   const chartRight = width - 40;
@@ -154,14 +154,16 @@ export function generateBarChartImage(
       ctx.font = 'bold 12px sans-serif';
       ctx.fillText(`${nom.voteCount} (${nom.percentage}%)`, centerX, barY - 10);
 
-      // Nominee Name below bar
+      // Multi-line Nominee Name below bar (Each word on its own line to prevent overlap)
       ctx.fillStyle = isWinner ? '#FF8A00' : '#E2E8F0';
-      ctx.font = isWinner ? 'bold 12px sans-serif' : 'normal 11px sans-serif';
-      let displayName = nom.displayName;
-      if (displayName.length > 18) {
-        displayName = displayName.slice(0, 16) + '…';
-      }
-      ctx.fillText(displayName, centerX, chartBottom + 24);
+      ctx.font = isWinner ? 'bold 11px sans-serif' : 'normal 11px sans-serif';
+
+      const words = (nom.displayName || '').split(/\s+/).filter(Boolean);
+      let textY = chartBottom + 18;
+      words.forEach((word) => {
+        ctx.fillText(word, centerX, textY);
+        textY += 13;
+      });
 
       // Role/Dept label below name
       const roleDept = nom.roleOrTitle || nom.department || '';
@@ -169,7 +171,7 @@ export function generateBarChartImage(
         ctx.fillStyle = '#64748B';
         ctx.font = 'normal 9.5px sans-serif';
         const truncatedSub = roleDept.length > 20 ? roleDept.slice(0, 18) + '…' : roleDept;
-        ctx.fillText(truncatedSub, centerX, chartBottom + 40);
+        ctx.fillText(truncatedSub, centerX, textY + 4);
       }
 
       // Winner Badge icon or indicator
@@ -192,12 +194,13 @@ export function generateBarChartImage(
 
 /**
  * Generates a high-resolution, branded Pie/Donut Chart image using HTML5 Canvas.
+ * Always renders complete nominee names, vote tallies, percentage breakdown, and slice indicators.
  */
 export function generatePieChartImage(
   exercise: VotingExercise,
   results: VotingResult,
   width = 1000,
-  height = 580
+  height = 600
 ): string {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -231,7 +234,7 @@ export function generatePieChartImage(
   // Header Title
   ctx.fillStyle = '#94A3B8';
   ctx.font = 'bold 12px sans-serif';
-  ctx.letterSpacing = '1px';
+  ctx.textAlign = 'left';
   ctx.fillText('OFFICIAL ELECTION AUDIT RECORD • PERCENTAGE BREAKDOWN', 40, 48);
 
   ctx.fillStyle = '#F8FAFC';
@@ -240,14 +243,14 @@ export function generatePieChartImage(
 
   ctx.fillStyle = '#94A3B8';
   ctx.font = 'normal 13px sans-serif';
-  const subtitle = `${exercise.title} • ${nominees.length} Nominees`;
+  const subtitle = `${exercise.title} • Total Votes: ${totalVotes} • ${nominees.length} Nominees Evaluated`;
   ctx.fillText(subtitle, 40, 102);
 
   // Donut Chart center and radii
-  const centerX = 290;
-  const centerY = 330;
-  const outerRadius = 150;
-  const innerRadius = 80;
+  const centerX = 260;
+  const centerY = 340;
+  const outerRadius = 145;
+  const innerRadius = 75;
 
   let currentAngle = -Math.PI / 2;
 
@@ -267,18 +270,31 @@ export function generatePieChartImage(
       ctx.lineWidth = 3;
       ctx.stroke();
 
+      // Draw percentage label on larger slices
+      if (nom.percentage && nom.percentage >= 6 && sliceAngle > 0.35) {
+        const midAngle = currentAngle + sliceAngle / 2;
+        const midRadius = (innerRadius + outerRadius) / 2;
+        const lx = centerX + Math.cos(midAngle) * midRadius;
+        const ly = centerY + Math.sin(midAngle) * midRadius;
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(`${nom.percentage}%`, lx, ly + 4);
+      }
+
       currentAngle += sliceAngle;
     });
 
     // Center Donut Text
     ctx.textAlign = 'center';
     ctx.fillStyle = '#F8FAFC';
-    ctx.font = 'bold 30px sans-serif';
+    ctx.font = 'bold 32px sans-serif';
     ctx.fillText(`${totalVotes}`, centerX, centerY + 2);
 
     ctx.fillStyle = '#94A3B8';
     ctx.font = 'bold 10px sans-serif';
-    ctx.fillText('TOTAL VOTES', centerX, centerY + 22);
+    ctx.fillText('TOTAL VOTES', centerX, centerY + 24);
   } else {
     // Empty state circle
     ctx.beginPath();
@@ -293,49 +309,56 @@ export function generatePieChartImage(
     ctx.fillText('No Votes Recorded', centerX, centerY);
   }
 
-  // Legend on the Right Side
-  const legendX = 540;
-  let legendY = 150;
-  const itemHeight = Math.min(48, (height - 200) / Math.max(nominees.length, 1));
+  // Legend on the Right Side (Supports multi-column or single column so all nominees show)
+  const isMultiCol = nominees.length > 6;
+  const col1X = 490;
+  const col2X = 740;
+  const startY = 145;
+  const availableHeight = height - startY - 50;
+  const rowsPerCol = isMultiCol ? Math.ceil(nominees.length / 2) : nominees.length;
+  const itemHeight = Math.min(52, Math.max(38, Math.floor(availableHeight / rowsPerCol)));
 
   ctx.textAlign = 'left';
-  nominees.slice(0, 7).forEach((nom, index) => {
+
+  nominees.forEach((nom, index) => {
+    const col = isMultiCol && index >= rowsPerCol ? 1 : 0;
+    const rowIndex = isMultiCol && index >= rowsPerCol ? index - rowsPerCol : index;
+    const legendX = col === 0 ? col1X : col2X;
+    const legendY = startY + rowIndex * itemHeight;
+
     const color = CHART_PALETTE[index % CHART_PALETTE.length];
     const isWinner = results.winners.some((w) => w.nomineeId === nom.nomineeId);
 
-    // Color square / pill
+    // Color Swatch
     ctx.fillStyle = color;
     drawRoundedRect(ctx, legendX, legendY, 14, 14, 4);
     ctx.fill();
 
-    // Nominee Name
+    // Nominee Full Display Name
     ctx.fillStyle = isWinner ? '#FF8A00' : '#F8FAFC';
-    ctx.font = isWinner ? 'bold 14px sans-serif' : 'bold 13px sans-serif';
+    ctx.font = isWinner ? 'bold 13px sans-serif' : 'bold 12px sans-serif';
+    const maxLen = isMultiCol ? 22 : 32;
     let displayName = nom.displayName;
-    if (displayName.length > 24) {
-      displayName = displayName.slice(0, 22) + '…';
+    if (displayName.length > maxLen) {
+      displayName = displayName.slice(0, maxLen - 2) + '…';
     }
-    ctx.fillText(displayName, legendX + 24, legendY + 12);
+    ctx.fillText(displayName, legendX + 22, legendY + 12);
 
     // Vote tally & percentage
     ctx.fillStyle = isWinner ? '#FF8A00' : '#94A3B8';
-    ctx.font = 'normal 12px sans-serif';
-    ctx.fillText(`${nom.voteCount} votes • ${nom.percentage}%`, legendX + 24, legendY + 28);
+    ctx.font = 'normal 11px sans-serif';
+    ctx.fillText(
+      `${nom.voteCount} votes • ${nom.percentage}% share`,
+      legendX + 22,
+      legendY + 28
+    );
 
     if (isWinner) {
       ctx.fillStyle = '#FF8A00';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.fillText('★ Winner', legendX + 280, legendY + 12);
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillText('★ 1st', legendX + (isMultiCol ? 180 : 280), legendY + 12);
     }
-
-    legendY += itemHeight;
   });
-
-  if (nominees.length > 7) {
-    ctx.fillStyle = '#64748B';
-    ctx.font = 'italic 11px sans-serif';
-    ctx.fillText(`+ ${nominees.length - 7} other nominees recorded`, legendX + 24, legendY + 10);
-  }
 
   // Footer branding
   ctx.textAlign = 'right';
@@ -397,19 +420,13 @@ export async function downloadChartAsImage(
   chartType: 'bar' | 'pie' | 'both',
   exercise: VotingExercise,
   results: VotingResult,
-  domIds?: { bar?: string; pie?: string }
+  _domIds?: { bar?: string; pie?: string }
 ): Promise<{ success: boolean; filenames: string[] }> {
   const safeTitle = exercise.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   const filenames: string[] = [];
 
-  const barId = domIds?.bar || 'results-bar-chart-card';
-  const pieId = domIds?.pie || 'results-pie-chart-card';
-
   if (chartType === 'bar' || chartType === 'both') {
-    let barImg = await captureDOMChartImage(barId);
-    if (!barImg) {
-      barImg = generateBarChartImage(exercise, results);
-    }
+    const barImg = generateBarChartImage(exercise, results);
     if (barImg) {
       const filename = `${safeTitle}-vote-distribution-chart.png`;
       downloadImageFile(barImg, filename);
@@ -418,15 +435,12 @@ export async function downloadChartAsImage(
   }
 
   if (chartType === 'pie' || chartType === 'both') {
-    // If downloading both, add a small 200ms delay so browsers don't block simultaneous downloads
+    // If downloading both, add a small 250ms delay so browsers don't block simultaneous downloads
     if (chartType === 'both') {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
-    let pieImg = await captureDOMChartImage(pieId);
-    if (!pieImg) {
-      pieImg = generatePieChartImage(exercise, results);
-    }
+    const pieImg = generatePieChartImage(exercise, results);
     if (pieImg) {
       const filename = `${safeTitle}-percentage-breakdown-chart.png`;
       downloadImageFile(pieImg, filename);
@@ -442,27 +456,16 @@ export async function downloadChartAsImage(
 
 /**
  * Resolves both Bar and Pie chart images for embedding into jsPDF.
- * Tries live DOM capture first, with seamless fallback to canvas generation.
+ * Always renders high-definition, publication-grade vector rasterizations.
  */
 export async function getChartImagesForPDF(
   exercise: VotingExercise,
   results: VotingResult,
-  domIds?: { bar?: string; pie?: string },
+  _domIds?: { bar?: string; pie?: string },
   providedImages?: ChartImages
 ): Promise<ChartImages> {
-  let barChartImage = providedImages?.barChartImage;
-  let pieChartImage = providedImages?.pieChartImage;
-
-  const barId = domIds?.bar || 'results-bar-chart-card';
-  const pieId = domIds?.pie || 'results-pie-chart-card';
-
-  if (!barChartImage) {
-    barChartImage = (await captureDOMChartImage(barId)) || generateBarChartImage(exercise, results);
-  }
-
-  if (!pieChartImage) {
-    pieChartImage = (await captureDOMChartImage(pieId)) || generatePieChartImage(exercise, results);
-  }
+  const barChartImage = providedImages?.barChartImage || generateBarChartImage(exercise, results);
+  const pieChartImage = providedImages?.pieChartImage || generatePieChartImage(exercise, results);
 
   return {
     barChartImage,

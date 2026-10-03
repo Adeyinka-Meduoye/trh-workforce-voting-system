@@ -92,6 +92,37 @@ interface ExerciseDetailManageProps {
 
 const PALETTE = ['#FF8A00', '#251464', '#10B981', '#38BDF8', '#818CF8', '#F59E0B', '#EC4899', '#A855F7'];
 
+/**
+ * Custom X-Axis Tick that splits nominee names by whitespace so each word
+ * appears on its own line (e.g. Adeyinka \n Oladele \n Meduoye) to prevent overlaps.
+ */
+const MultiLineNomineeTick = (props: any) => {
+  const { x, y, payload } = props;
+  if (!payload || !payload.value) return null;
+  const name = String(payload.value).trim();
+  const words = name.split(/\s+/).filter(Boolean);
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={8}
+        textAnchor="middle"
+        fill="#94A3B8"
+        fontSize={10}
+        fontWeight={500}
+      >
+        {words.map((word: string, i: number) => (
+          <tspan x={0} dy={i === 0 ? 8 : 12} key={i}>
+            {word}
+          </tspan>
+        ))}
+      </text>
+    </g>
+  );
+};
+
 export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
   exerciseId,
   onBack
@@ -1658,11 +1689,11 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
                   </button>
                 </div>
 
-                <div className="h-64 w-full pt-2">
+                <div className="h-80 w-full pt-2">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={results.nomineeResults}>
-                      <XAxis dataKey="displayName" tick={{ fill: '#94A3B8', fontSize: 10 }} interval={0} />
-                      <YAxis allowDecimals={false} tick={{ fill: '#94A3B8', fontSize: 10 }} />
+                    <BarChart data={results.nomineeResults} margin={{ top: 15, right: 15, left: -10, bottom: 25 }}>
+                      <XAxis dataKey="displayName" tick={<MultiLineNomineeTick />} interval={0} height={70} stroke="#334155" />
+                      <YAxis allowDecimals={false} tick={{ fill: '#94A3B8', fontSize: 10 }} stroke="#334155" />
                       <Tooltip
                         formatter={(val: any) => [`${val} votes`, 'Count']}
                         contentStyle={{
@@ -1718,14 +1749,22 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
                         nameKey="displayName"
                         cx="50%"
                         cy="50%"
-                        outerRadius={80}
-                        label={(entry: any) => `${entry.displayName || entry.name}: ${entry.percentage ?? Math.round((entry.percent || 0) * 100)}%`}
+                        innerRadius={45}
+                        outerRadius={75}
+                        label={({ payload, percent }: any) => {
+                          const pct = payload?.percentage !== undefined ? payload.percentage : Math.round((percent || 0) * 100);
+                          return `${pct}%`;
+                        }}
                       >
                         {results.nomineeResults.map((entry, index) => (
                           <Cell key={`pie-cell-${index}`} fill={PALETTE[index % PALETTE.length]} />
                         ))}
                       </Pie>
                       <Tooltip
+                        formatter={(val: any, _name: any, item: any) => [
+                          `${val} votes (${item.payload?.percentage ?? 0}%)`,
+                          item.payload?.displayName || 'Nominee'
+                        ]}
                         contentStyle={{
                           backgroundColor: '#0F172A',
                           borderColor: '#334155',
@@ -1736,6 +1775,54 @@ export const ExerciseDetailManage: React.FC<ExerciseDetailManageProps> = ({
                       />
                     </PieChart>
                   </ResponsiveContainer>
+                </div>
+
+                {/* Nominee Names and Percentage Breakdown Legend */}
+                <div className="pt-3 border-t border-slate-800 space-y-2">
+                  <div className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider">
+                    Nominee Share Breakdown ({results.nomineeResults.length})
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {results.nomineeResults.map((nom, idx) => {
+                      const color = PALETTE[idx % PALETTE.length];
+                      const isWinner = results.winners.some((w) => w.nomineeId === nom.nomineeId);
+                      return (
+                        <div
+                          key={nom.nomineeId}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-colors ${
+                            isWinner
+                              ? 'bg-amber-500/10 border-amber-500/30'
+                              : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                            <span
+                              className="w-3.5 h-3.5 rounded-md shrink-0 shadow-xs"
+                              style={{ backgroundColor: color }}
+                            />
+                            <div className="min-w-0">
+                              <p className="font-semibold text-white truncate text-xs leading-tight">
+                                {nom.displayName}
+                              </p>
+                              {(nom.roleOrTitle || nom.department) && (
+                                <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                                  {[nom.roleOrTitle, nom.department].filter(Boolean).join(' • ')}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="font-bold text-emerald-400 font-mono text-xs block">
+                              {nom.percentage}%
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {nom.voteCount} {nom.voteCount === 1 ? 'vote' : 'votes'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
